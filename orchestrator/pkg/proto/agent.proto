@@ -1,0 +1,147 @@
+syntax = "proto3";
+
+package agent;
+
+option go_package = "github.com/easyti/easydeploy/orchestrator/pkg/proto";
+
+service AgentService {
+  // Container management
+  rpc CreateContainer(CreateContainerRequest) returns (CreateContainerResponse);
+  rpc RemoveContainer(RemoveContainerRequest) returns (RemoveContainerResponse);
+  rpc StartContainer(StartContainerRequest) returns (StartContainerResponse);
+  rpc StopContainer(StopContainerRequest) returns (StopContainerResponse);
+  rpc RestartContainer(RestartContainerRequest) returns (RestartContainerResponse);
+
+  // Logs
+  rpc GetContainerLogs(GetLogsRequest) returns (stream LogLine);
+
+  // Health & Stats
+  rpc CheckHealth(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc GetServerStats(ServerStatsRequest) returns (ServerStatsResponse);
+
+  // Image management
+  rpc PullImage(PullImageRequest) returns (PullImageResponse);
+  rpc BuildImage(BuildImageRequest) returns (stream BuildOutput);
+}
+
+// Container Management Messages
+message CreateContainerRequest {
+  string image = 1;
+  string name = 2;
+  int32 port = 3;
+  map<string, string> environment = 4;
+  int64 cpu_limit = 5;       // millicores
+  int64 memory_limit = 6;    // bytes
+  HealthCheckConfig health_check = 7;
+  repeated string labels = 8;
+}
+
+message CreateContainerResponse {
+  string container_id = 1;
+  string internal_ip = 2;
+  int32 port = 3;
+}
+
+message RemoveContainerRequest {
+  string container_id = 1;
+  bool force = 2;
+}
+
+message RemoveContainerResponse {
+  bool success = 1;
+}
+
+message StartContainerRequest {
+  string container_id = 1;
+}
+
+message StartContainerResponse {
+  bool success = 1;
+}
+
+message StopContainerRequest {
+  string container_id = 1;
+  int32 timeout_seconds = 2;
+}
+
+message StopContainerResponse {
+  bool success = 1;
+}
+
+message RestartContainerRequest {
+  string container_id = 1;
+  int32 timeout_seconds = 2;
+}
+
+message RestartContainerResponse {
+  bool success = 1;
+}
+
+// Logs Messages
+message GetLogsRequest {
+  string container_id = 1;
+  int32 lines = 2;
+  bool follow = 3;
+  int64 since = 4;  // Unix timestamp
+}
+
+message LogLine {
+  string content = 1;
+  int64 timestamp = 2;
+}
+
+// Health & Stats Messages
+message HealthCheckRequest {
+  string container_id = 1;
+}
+
+message HealthCheckResponse {
+  bool is_healthy = 1;
+  string status = 2;
+  double cpu_usage = 3;
+  double memory_usage = 4;
+  int32 restart_count = 5;
+}
+
+message HealthCheckConfig {
+  string path = 1;
+  int32 interval = 2;
+  int32 timeout = 3;
+  int32 retries = 4;
+}
+
+message ServerStatsRequest {}
+
+message ServerStatsResponse {
+  double cpu_usage = 1;
+  int64 memory_usage = 2;
+  int64 memory_total = 3;
+  int64 disk_usage = 4;
+  int64 disk_total = 5;
+  int32 container_count = 6;
+}
+
+// Image Messages
+message PullImageRequest {
+  string image = 1;
+  string registry_auth = 2;
+}
+
+message PullImageResponse {
+  bool success = 1;
+  string digest = 2;
+}
+
+message BuildImageRequest {
+  string context_path = 1;
+  string dockerfile = 2;
+  string tag = 3;
+  map<string, string> build_args = 4;
+  bool no_cache = 5;
+}
+
+message BuildOutput {
+  string stream = 1;
+  string error = 2;
+  bool is_error = 3;
+}

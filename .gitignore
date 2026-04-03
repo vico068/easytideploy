@@ -1,0 +1,62 @@
+# Dependencies
+/panel/vendor/
+/panel/node_modules/
+/orchestrator/vendor/
+/agent/vendor/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+/panel/storage/logs/*
+!/panel/storage/logs/.gitkeep
+
+# Cache
+/panel/storage/framework/cache/*
+!/panel/storage/framework/cache/.gitkeep
+/panel/storage/framework/sessions/*
+!/panel/storage/framework/sessions/.gitkeep
+/panel/storage/framework/views/*
+!/panel/storage/framework/views/.gitkeep
+/panel/bootstrap/cache/*
+!/panel/bootstrap/cache/.gitkeep
+
+# Testing
+/panel/coverage/
+.phpunit.result.cache
+
+# Build artifacts
+/orchestrator/bin/
+/agent/bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go
+/orchestrator/tmp/
+/agent/tmp/
+
+# Docker
+docker-compose.override.yml
+
+# Backups
+/backups/
+
+# Temporary files
+*.tmp
+*.bak

@@ -1,0 +1,275 @@
+# EasyDeploy PaaS - Docker Compose
+# Development: docker compose up -d
+# Production:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  # ===================
+  # Infrastructure
+  # ===================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: easydeploy-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: easydeploy
+      POSTGRES_USER: easydeploy
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-easydeploy_dev}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U easydeploy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - easydeploy
+
+  redis:
+    image: redis:7-alpine
+    container_name: easydeploy-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - easydeploy
+
+  traefik:
+    image: traefik:v3.0
+    container_name: easydeploy-traefik
+    restart: unless-stopped
+    command:
+      - "--api.insecure=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=easydeploy"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--log.level=${TRAEFIK_LOG_LEVEL:-INFO}"
+      - "--accesslog=true"
+    ports:
+      - "80:80"
+      - "443:443"
+      - "${TRAEFIK_DASHBOARD_PORT:-8081}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./proxy/traefik.yml:/etc/traefik/traefik.yml:ro
+      - traefik_dynamic:/etc/traefik/dynamic
+      - traefik_acme:/etc/traefik/acme
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - easydeploy
+
+  registry:
+    image: registry:2
+    container_name: easydeploy-registry
+    restart: unless-stopped
+    ports:
+      - "${REGISTRY_PORT:-5000}:5000"
+    volumes:
+      - registry_data:/var/lib/registry
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+    networks:
+      - easydeploy
+
+  # ===================
+  # Orchestrator (Go)
+  # ===================
+
+  orchestrator:
+    build:
+      context: ./orchestrator
+      dockerfile: Dockerfile
+    container_name: easydeploy-orchestrator
+    restart: unless-stopped
+    environment:
+      LISTEN_ADDR: ":8080"
+      API_KEY: ${API_KEY:-easydeploy_api_key_dev}
+      DATABASE_URL: postgres://easydeploy:${DB_PASSWORD:-easydeploy_dev}@postgres:5432/easydeploy?sslmode=disable
+      REDIS_URL: redis://redis:6379
+      TRAEFIK_API_URL: http://traefik:8080
+      TRAEFIK_CONFIG_DIR: /etc/traefik/dynamic
+      DOCKER_REGISTRY: ${DOCKER_REGISTRY:-registry:5000}
+      DATA_DIR: /var/lib/easydeploy
+      BUILD_TIMEOUT: "600"
+      HEALTH_CHECK_INTERVAL: "30"
+      ACME_ENABLED: "${ACME_ENABLED:-false}"
+      ACME_EMAIL: "${ACME_EMAIL:-admin@easyti.cloud}"
+      ACME_STAGING: "${ACME_STAGING:-true}"
+      APP_ENV: ${APP_ENV:-development}
+    ports:
+      - "${ORCHESTRATOR_PORT:-8080}:8080"
+    volumes:
+      - orchestrator_data:/var/lib/easydeploy
+      - traefik_dynamic:/etc/traefik/dynamic
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - easydeploy
+
+  # ===================
+  # Agent (Go - runs on each server)
+  # ===================
+
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    container_name: easydeploy-agent
+    restart: unless-stopped
+    environment:
+      SERVER_ID: ${AGENT_SERVER_ID:-dev-server-01}
+      SERVER_NAME: ${AGENT_SERVER_NAME:-Development Server}
+      ORCHESTRATOR_URL: http://orchestrator:8080
+      GRPC_ADDRESS: ":9090"
+      HTTP_ADDRESS: ":9091"
+      MAX_CONTAINERS: "50"
+      HEARTBEAT_INTERVAL: "30"
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      LOG_JSON: "false"
+    ports:
+      - "${AGENT_GRPC_PORT:-9090}:9090"
+      - "${AGENT_HTTP_PORT:-9091}:9091"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      orchestrator:
+        condition: service_healthy
+    networks:
+      - easydeploy
+
+  # ===================
+  # Panel (Laravel + Filament)
+  # ===================
+
+  panel:
+    build:
+      context: ./panel
+      dockerfile: Dockerfile
+    container_name: easydeploy-panel
+    restart: unless-stopped
+    environment:
+      APP_NAME: EasyDeploy
+      APP_ENV: ${APP_ENV:-local}
+      APP_KEY: ${APP_KEY:-base64:CHANGE_ME_GENERATE_WITH_ARTISAN}
+      APP_DEBUG: "${APP_DEBUG:-true}"
+      APP_URL: ${APP_URL:-http://localhost:8000}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: easydeploy
+      DB_USERNAME: easydeploy
+      DB_PASSWORD: ${DB_PASSWORD:-easydeploy_dev}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CACHE_STORE: redis
+      SESSION_DRIVER: redis
+      QUEUE_CONNECTION: redis
+      EASYDEPLOY_ORCHESTRATOR_URL: http://orchestrator:8080
+      EASYDEPLOY_API_KEY: ${API_KEY:-easydeploy_api_key_dev}
+    ports:
+      - "${PANEL_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - easydeploy
+
+  # Queue Worker
+  queue-worker:
+    build:
+      context: ./panel
+      dockerfile: Dockerfile
+    container_name: easydeploy-queue-worker
+    restart: unless-stopped
+    command: php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      APP_KEY: ${APP_KEY:-base64:CHANGE_ME_GENERATE_WITH_ARTISAN}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: easydeploy
+      DB_USERNAME: easydeploy
+      DB_PASSWORD: ${DB_PASSWORD:-easydeploy_dev}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      QUEUE_CONNECTION: redis
+      EASYDEPLOY_ORCHESTRATOR_URL: http://orchestrator:8080
+      EASYDEPLOY_API_KEY: ${API_KEY:-easydeploy_api_key_dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - easydeploy
+
+  # Scheduler
+  scheduler:
+    build:
+      context: ./panel
+      dockerfile: Dockerfile
+    container_name: easydeploy-scheduler
+    restart: unless-stopped
+    command: php artisan schedule:work
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      APP_KEY: ${APP_KEY:-base64:CHANGE_ME_GENERATE_WITH_ARTISAN}
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: easydeploy
+      DB_USERNAME: easydeploy
+      DB_PASSWORD: ${DB_PASSWORD:-easydeploy_dev}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      QUEUE_CONNECTION: redis
+      EASYDEPLOY_ORCHESTRATOR_URL: http://orchestrator:8080
+      EASYDEPLOY_API_KEY: ${API_KEY:-easydeploy_api_key_dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - easydeploy
+
+networks:
+  easydeploy:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  orchestrator_data:
+  traefik_dynamic:
+  traefik_acme:
+  registry_data:

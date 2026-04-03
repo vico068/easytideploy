@@ -1,0 +1,9 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "mkdir": true,
+        "/^php artisan --version && cat composer\\.json \\| grep -A 5 '\"require\"'$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
+}
