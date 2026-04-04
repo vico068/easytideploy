@@ -18,15 +18,18 @@ class Container extends Model
         'application_id',
         'deployment_id',
         'server_id',
-        'container_id',
-        'container_name',
+        'docker_container_id',
+        'name',
         'internal_ip',
-        'port',
+        'internal_port',
+        'host_port',
+        'replica_index',
         'status',
         'health_status',
         'cpu_usage',
         'memory_usage',
         'restart_count',
+        'health_checked_at',
         'started_at',
     ];
 
@@ -38,7 +41,10 @@ class Container extends Model
             'cpu_usage' => 'decimal:2',
             'memory_usage' => 'decimal:2',
             'restart_count' => 'integer',
-            'port' => 'integer',
+            'internal_port' => 'integer',
+            'host_port' => 'integer',
+            'replica_index' => 'integer',
+            'health_checked_at' => 'datetime',
             'started_at' => 'datetime',
         ];
     }
@@ -70,12 +76,12 @@ class Container extends Model
 
     public function getAddressAttribute(): string
     {
-        return sprintf('%s:%d', $this->internal_ip, $this->port);
+        return sprintf('%s:%d', $this->internal_ip, $this->internal_port);
     }
 
     public function getShortContainerIdAttribute(): string
     {
-        return substr($this->container_id, 0, 12);
+        return substr($this->docker_container_id, 0, 12);
     }
 
     public function getUptimeAttribute(): ?string

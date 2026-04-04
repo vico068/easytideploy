@@ -16,10 +16,12 @@ return new class extends Migration
             $table->string('commit_author')->nullable();
             $table->string('status')->default('pending');       // pending, building, deploying, running, failed, cancelled, rolled_back
             $table->longText('build_logs')->nullable();
-            $table->string('image_tag')->nullable();            // easydeploy/app-slug:deployment-id
-            $table->string('triggered_by')->default('manual');  // manual, webhook, api, rollback, auto_scale
+            $table->string('image_name')->nullable();           // easydeploy/app-slug
+            $table->string('image_tag')->nullable();            // deployment-id or version
+            $table->string('triggered_by')->default('manual');  // manual, webhook, api, rollback, auto_scale, retry
+            $table->text('error_message')->nullable();
             $table->timestamp('started_at')->nullable();
-            $table->timestamp('finished_at')->nullable();
+            $table->timestamp('completed_at')->nullable();
             $table->integer('duration_seconds')->nullable();
             $table->timestamps();
 

@@ -92,7 +92,7 @@ class OrchestratorClient
                 ->get()
                 ->map(fn ($c) => [
                     'ip' => $c->internal_ip,
-                    'port' => $c->port,
+                    'port' => $c->internal_port,
                     'server' => $c->server->hostname,
                 ])
                 ->toArray(),

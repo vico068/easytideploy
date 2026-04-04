@@ -19,6 +19,7 @@ class Domain extends Model
         'ssl_certificate',
         'ssl_private_key',
         'is_primary',
+        'verified',
         'ssl_status',
         'ssl_expires_at',
     ];
@@ -28,6 +29,7 @@ class Domain extends Model
         return [
             'ssl_enabled' => 'boolean',
             'is_primary' => 'boolean',
+            'verified' => 'boolean',
             'ssl_status' => SslStatus::class,
             'ssl_expires_at' => 'datetime',
             'ssl_certificate' => 'encrypted',

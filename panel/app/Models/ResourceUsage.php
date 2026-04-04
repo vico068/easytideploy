@@ -14,8 +14,14 @@ class ResourceUsage extends Model
     protected $fillable = [
         'application_id',
         'container_id',
+        'server_id',
+        'cpu_percent',
+        'memory_percent',
+        'disk_percent',
         'cpu_usage',
         'memory_usage',
+        'network_in',
+        'network_out',
         'network_rx',
         'network_tx',
         'disk_read',
@@ -26,8 +32,13 @@ class ResourceUsage extends Model
     protected function casts(): array
     {
         return [
+            'cpu_percent' => 'decimal:2',
+            'memory_percent' => 'decimal:2',
+            'disk_percent' => 'decimal:2',
             'cpu_usage' => 'decimal:2',
             'memory_usage' => 'decimal:2',
+            'network_in' => 'integer',
+            'network_out' => 'integer',
             'network_rx' => 'integer',
             'network_tx' => 'integer',
             'disk_read' => 'integer',

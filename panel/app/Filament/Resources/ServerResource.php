@@ -37,7 +37,6 @@ class ServerResource extends Resource
                             ->maxLength(255),
 
                         Forms\Components\TextInput::make('hostname')
-                            ->required()
                             ->maxLength(255),
 
                         Forms\Components\TextInput::make('ip_address')
@@ -129,7 +128,7 @@ class ServerResource extends Resource
                     ->suffix('%')
                     ->color(fn ($state) => $state > 80 ? 'danger' : ($state > 60 ? 'warning' : 'success')),
 
-                Tables\Columns\TextColumn::make('last_heartbeat_at')
+                Tables\Columns\TextColumn::make('last_heartbeat')
                     ->label('Último heartbeat')
                     ->dateTime('d/m H:i:s')
                     ->sortable(),

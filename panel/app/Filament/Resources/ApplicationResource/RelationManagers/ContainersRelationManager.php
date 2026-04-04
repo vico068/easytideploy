@@ -16,9 +16,9 @@ class ContainersRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->recordTitleAttribute('container_name')
+            ->recordTitleAttribute('name')
             ->columns([
-                Tables\Columns\TextColumn::make('container_name')
+                Tables\Columns\TextColumn::make('name')
                     ->label('Nome')
                     ->searchable(),
 

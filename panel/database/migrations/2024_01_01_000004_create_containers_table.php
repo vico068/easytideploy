@@ -13,22 +13,25 @@ return new class extends Migration
             $table->foreignUuid('application_id')->constrained()->cascadeOnDelete();
             $table->foreignUuid('deployment_id')->constrained()->cascadeOnDelete();
             $table->foreignUuid('server_id')->constrained()->cascadeOnDelete();
-            $table->string('container_id');                     // Docker container ID
-            $table->string('container_name');
+            $table->string('docker_container_id')->nullable();  // Docker container ID
+            $table->string('name');                             // container name
             $table->ipAddress('internal_ip')->nullable();
-            $table->integer('port');
-            $table->string('status')->default('starting');      // starting, running, stopping, stopped, failed, unhealthy
+            $table->integer('internal_port')->default(0);
+            $table->integer('host_port')->nullable();
+            $table->integer('replica_index')->default(0);
+            $table->string('status')->default('starting');      // starting, running, stopping, stopped, failed, unhealthy, pending
             $table->string('health_status')->default('unknown'); // healthy, unhealthy, unknown
             $table->decimal('cpu_usage', 5, 2)->default(0);
             $table->decimal('memory_usage', 5, 2)->default(0);
             $table->integer('restart_count')->default(0);
+            $table->timestamp('health_checked_at')->nullable();
             $table->timestamp('started_at')->nullable();
             $table->timestamps();
 
             $table->index(['application_id', 'status']);
             $table->index(['server_id', 'status']);
             $table->index(['deployment_id', 'status']);
-            $table->index('container_id');
+            $table->index('docker_container_id');
         });
     }
 

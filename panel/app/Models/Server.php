@@ -17,15 +17,19 @@ class Server extends Model
         'hostname',
         'ip_address',
         'internal_ip',
+        'agent_address',
         'agent_port',
         'status',
         'max_containers',
+        'cpu_cores',
         'cpu_total',
         'memory_total',
+        'disk_total',
         'cpu_used',
         'memory_used',
+        'docker_version',
         'labels',
-        'last_heartbeat_at',
+        'last_heartbeat',
     ];
 
     protected function casts(): array
@@ -33,11 +37,13 @@ class Server extends Model
         return [
             'status' => ServerStatus::class,
             'labels' => 'array',
-            'last_heartbeat_at' => 'datetime',
+            'last_heartbeat' => 'datetime',
             'agent_port' => 'integer',
             'max_containers' => 'integer',
+            'cpu_cores' => 'integer',
             'cpu_total' => 'integer',
             'memory_total' => 'integer',
+            'disk_total' => 'integer',
             'cpu_used' => 'integer',
             'memory_used' => 'integer',
         ];

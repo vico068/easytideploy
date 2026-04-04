@@ -32,6 +32,6 @@ USER easydeploy
 EXPOSE 8080
 
 HEALTHCHECK --interval=15s --timeout=5s --retries=3 \
-    CMD wget -q --spider http://localhost:8080/health || exit 1
+    CMD wget -q -O /dev/null http://localhost:8080/health || exit 1
 
 ENTRYPOINT ["./orchestrator"]

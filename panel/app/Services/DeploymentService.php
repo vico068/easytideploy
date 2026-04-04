@@ -57,7 +57,7 @@ class DeploymentService
 
             $deployment->update([
                 'status' => DeploymentStatus::Cancelled,
-                'finished_at' => now(),
+                'completed_at' => now(),
             ]);
 
             return true;

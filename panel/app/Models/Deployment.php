@@ -20,10 +20,12 @@ class Deployment extends Model
         'commit_author',
         'status',
         'build_logs',
+        'image_name',
         'image_tag',
         'triggered_by',
+        'error_message',
         'started_at',
-        'finished_at',
+        'completed_at',
         'duration_seconds',
     ];
 
@@ -32,7 +34,7 @@ class Deployment extends Model
         return [
             'status' => DeploymentStatus::class,
             'started_at' => 'datetime',
-            'finished_at' => 'datetime',
+            'completed_at' => 'datetime',
             'duration_seconds' => 'integer',
         ];
     }
@@ -110,7 +112,7 @@ class Deployment extends Model
     {
         $this->update([
             'status' => DeploymentStatus::Running,
-            'finished_at' => now(),
+            'completed_at' => now(),
             'duration_seconds' => $this->started_at?->diffInSeconds(now()),
         ]);
     }
@@ -119,7 +121,7 @@ class Deployment extends Model
     {
         $this->update([
             'status' => DeploymentStatus::Failed,
-            'finished_at' => now(),
+            'completed_at' => now(),
             'duration_seconds' => $this->started_at?->diffInSeconds(now()),
             'build_logs' => $this->build_logs."\n\n[ERROR] ".$reason,
         ]);

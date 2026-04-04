@@ -25,6 +25,7 @@ class Application extends Model
         'git_repository',
         'git_branch',
         'git_token',
+        'runtime_version',
         'build_command',
         'start_command',
         'root_directory',
@@ -34,11 +35,15 @@ class Application extends Model
         'max_replicas',
         'auto_deploy',
         'auto_scale',
+        'ssl_enabled',
         'cpu_limit',
         'memory_limit',
         'status',
+        'health_check_path',
+        'health_check_interval',
         'health_check',
         'webhook_secret',
+        'traefik_config_updated_at',
     ];
 
     protected function casts(): array
@@ -49,13 +54,16 @@ class Application extends Model
             'health_check' => 'array',
             'auto_deploy' => 'boolean',
             'auto_scale' => 'boolean',
+            'ssl_enabled' => 'boolean',
             'port' => 'integer',
             'replicas' => 'integer',
             'min_replicas' => 'integer',
             'max_replicas' => 'integer',
             'cpu_limit' => 'integer',
             'memory_limit' => 'integer',
+            'health_check_interval' => 'integer',
             'git_token' => 'encrypted',
+            'traefik_config_updated_at' => 'datetime',
         ];
     }
 

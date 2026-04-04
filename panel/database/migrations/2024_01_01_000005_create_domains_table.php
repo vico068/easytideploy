@@ -16,7 +16,8 @@ return new class extends Migration
             $table->text('ssl_certificate')->nullable();
             $table->text('ssl_private_key')->nullable();
             $table->boolean('is_primary')->default(false);
-            $table->string('ssl_status')->default('pending');   // pending, active, expired, failed
+            $table->boolean('verified')->default(false);
+            $table->string('ssl_status')->default('pending');   // pending, issued, active, expired, failed, disabled
             $table->timestamp('ssl_expires_at')->nullable();
             $table->timestamps();
 
