@@ -1,0 +1,45 @@
+# EasyDeploy - Traefik dynamic routes
+# Uses Go templates to read env vars from the Traefik container
+http:
+  routers:
+    panel:
+      rule: "Host(`{{ env "PANEL_DOMAIN" }}`)"
+      entryPoints:
+        - websecure
+      service: panel
+      tls:
+        certResolver: letsencrypt
+    orchestrator:
+      rule: "Host(`{{ env "API_DOMAIN" }}`)"
+      entryPoints:
+        - websecure
+      service: orchestrator
+      tls:
+        certResolver: letsencrypt
+{{ if env "TRAEFIK_DASHBOARD_DOMAIN" }}
+    dashboard:
+      rule: "Host(`{{ env "TRAEFIK_DASHBOARD_DOMAIN" }}`)"
+      entryPoints:
+        - websecure
+      service: api@internal
+      middlewares:
+        - dashboard-auth
+      tls:
+        certResolver: letsencrypt
+{{ end }}
+  services:
+    panel:
+      loadBalancer:
+        servers:
+          - url: "http://easydeploy-panel:8000"
+    orchestrator:
+      loadBalancer:
+        servers:
+          - url: "http://easydeploy-orchestrator:8080"
+{{ if env "TRAEFIK_AUTH" }}
+  middlewares:
+    dashboard-auth:
+      basicAuth:
+        users:
+          - "{{ env "TRAEFIK_AUTH" }}"
+{{ end }}

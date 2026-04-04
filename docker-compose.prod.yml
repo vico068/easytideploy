@@ -53,11 +53,13 @@ services:
     image: traefik:latest
     container_name: easydeploy-traefik
     restart: always
+    environment:
+      PANEL_DOMAIN: deploy.${DOMAIN}
+      API_DOMAIN: api.${DOMAIN}
+      TRAEFIK_DASHBOARD_DOMAIN: traefik.${DOMAIN}
+      TRAEFIK_AUTH: ${TRAEFIK_AUTH}
     command:
       - "--api.dashboard=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=easydeploy_easydeploy"
       - "--providers.file.directory=/etc/traefik/dynamic"
       - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
@@ -75,18 +77,11 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_dynamic:/etc/traefik/dynamic
+      - ./proxy/dynamic/routes.yml:/etc/traefik/dynamic/routes.yml:ro
       - traefik_acme:/etc/traefik/acme
     networks:
       - easydeploy
       - easydeploy-internal
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`traefik.${DOMAIN}`)"
-      - "traefik.http.routers.dashboard.service=api@internal"
-      - "traefik.http.routers.dashboard.middlewares=auth"
-      - "traefik.http.routers.dashboard.entrypoints=websecure"
-      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
-      - "traefik.http.middlewares.auth.basicauth.users=${TRAEFIK_AUTH}"
     deploy:
       resources:
         limits:
@@ -124,12 +119,6 @@ services:
     networks:
       - easydeploy
       - easydeploy-internal
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.orchestrator.rule=Host(`api.${DOMAIN}`)"
-      - "traefik.http.routers.orchestrator.entrypoints=websecure"
-      - "traefik.http.routers.orchestrator.tls.certresolver=letsencrypt"
-      - "traefik.http.services.orchestrator.loadbalancer.server.port=8080"
     deploy:
       resources:
         limits:
@@ -168,12 +157,6 @@ services:
     networks:
       - easydeploy
       - easydeploy-internal
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.panel.rule=Host(`deploy.${DOMAIN}`)"
-      - "traefik.http.routers.panel.entrypoints=websecure"
-      - "traefik.http.routers.panel.tls.certresolver=letsencrypt"
-      - "traefik.http.services.panel.loadbalancer.server.port=8000"
     deploy:
       resources:
         limits:

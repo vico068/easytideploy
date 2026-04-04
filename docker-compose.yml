@@ -48,12 +48,12 @@ services:
     image: traefik:latest
     container_name: easydeploy-traefik
     restart: unless-stopped
+    environment:
+      PANEL_DOMAIN: ${PANEL_DOMAIN:-deploy.localhost}
+      API_DOMAIN: ${API_DOMAIN:-api.localhost}
     command:
       - "--api.insecure=true"
       - "--api.dashboard=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=easydeploy_easydeploy"
       - "--providers.file.directory=/etc/traefik/dynamic"
       - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
@@ -73,6 +73,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_dynamic:/etc/traefik/dynamic
+      - ./proxy/dynamic/routes.yml:/etc/traefik/dynamic/routes.yml:ro
       - traefik_acme:/etc/traefik/acme
     healthcheck:
       test: ["CMD", "traefik", "healthcheck", "--ping"]
@@ -137,12 +138,6 @@ services:
       retries: 3
     networks:
       - easydeploy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.orchestrator.rule=Host(`${API_DOMAIN:-api.localhost}`)"
-      - "traefik.http.routers.orchestrator.entrypoints=websecure"
-      - "traefik.http.routers.orchestrator.tls.certresolver=letsencrypt"
-      - "traefik.http.services.orchestrator.loadbalancer.server.port=8080"
 
   # ===================
   # Agent (Go - runs on each server)
@@ -213,12 +208,6 @@ services:
         condition: service_healthy
     networks:
       - easydeploy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.panel.rule=Host(`${PANEL_DOMAIN:-deploy.localhost}`)"
-      - "traefik.http.routers.panel.entrypoints=websecure"
-      - "traefik.http.routers.panel.tls.certresolver=letsencrypt"
-      - "traefik.http.services.panel.loadbalancer.server.port=8000"
 
   # Queue Worker
   queue-worker:
