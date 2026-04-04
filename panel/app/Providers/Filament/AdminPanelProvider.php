@@ -27,8 +27,27 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
+            ->brandLogo(asset('images/logo-vertical-easyti-cloud.png'))
+            ->brandLogoHeight('2.5rem')
+            ->font('Manrope')
             ->colors([
-                'primary' => Color::Amber,
+                'primary' => [
+                    50 => '238, 249, 255',
+                    100 => '216, 241, 255',
+                    200 => '185, 231, 255',
+                    300 => '137, 218, 255',
+                    400 => '82, 196, 255',
+                    500 => '42, 174, 255',
+                    600 => '13, 139, 250',  // Brand Blue EasyTI
+                    700 => '12, 111, 199',
+                    800 => '18, 93, 161',
+                    900 => '21, 78, 127',
+                    950 => '16, 49, 77',
+                ],
+                'success' => Color::Emerald,
+                'warning' => Color::Amber,
+                'danger' => Color::Red,
+                'info' => Color::Sky,
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
