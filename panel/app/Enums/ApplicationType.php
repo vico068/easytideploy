@@ -30,12 +30,12 @@ enum ApplicationType: string implements HasLabel, HasColor, HasIcon
     public function getColor(): string|array|null
     {
         return match ($this) {
-            self::NodeJS => 'success',
-            self::PHP => 'info',
-            self::Golang => 'warning',
-            self::Python => 'primary',
-            self::Static => 'gray',
-            self::Docker => 'danger',
+            self::NodeJS => 'success',    // Verde - Node.js
+            self::PHP => 'primary',       // Azul - PHP
+            self::Golang => 'info',       // Cyan - Go
+            self::Python => 'warning',    // Amarelo - Python
+            self::Static => 'gray',       // Cinza - Static
+            self::Docker => 'info',       // Cyan - Docker
         };
     }
 

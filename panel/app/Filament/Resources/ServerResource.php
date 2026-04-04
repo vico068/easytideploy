@@ -103,39 +103,59 @@ class ServerResource extends Resource
                 Tables\Columns\TextColumn::make('name')
                     ->label('Nome')
                     ->searchable()
-                    ->sortable(),
-
-                Tables\Columns\TextColumn::make('hostname')
-                    ->searchable(),
+                    ->sortable()
+                    ->weight('medium')
+                    ->description(fn (Server $record) => $record->hostname),
 
                 Tables\Columns\TextColumn::make('ip_address')
-                    ->label('IP'),
+                    ->label('IP')
+                    ->copyable()
+                    ->copyMessage('IP copiado!')
+                    ->icon('heroicon-m-server')
+                    ->searchable(),
 
                 Tables\Columns\TextColumn::make('status')
-                    ->badge(),
+                    ->label('Status')
+                    ->badge()
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('containers_count')
                     ->counts('containers')
-                    ->label('Containers'),
+                    ->label('Containers')
+                    ->alignCenter()
+                    ->sortable()
+                    ->badge()
+                    ->color(fn ($state) => $state > 0 ? 'info' : 'gray'),
 
                 Tables\Columns\TextColumn::make('cpu_usage_percent')
                     ->label('CPU')
                     ->suffix('%')
+                    ->alignCenter()
+                    ->sortable()
+                    ->badge()
                     ->color(fn ($state) => $state > 80 ? 'danger' : ($state > 60 ? 'warning' : 'success')),
 
                 Tables\Columns\TextColumn::make('memory_usage_percent')
                     ->label('Memória')
                     ->suffix('%')
+                    ->alignCenter()
+                    ->sortable()
+                    ->badge()
                     ->color(fn ($state) => $state > 80 ? 'danger' : ($state > 60 ? 'warning' : 'success')),
 
                 Tables\Columns\TextColumn::make('last_heartbeat')
                     ->label('Último heartbeat')
                     ->dateTime('d/m H:i:s')
-                    ->sortable(),
+                    ->sortable()
+                    ->since()
+                    ->description(fn ($record) => $record->last_heartbeat?->diffForHumans())
+                    ->toggleable(),
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
-                    ->options(ServerStatus::class),
+                    ->label('Status')
+                    ->options(ServerStatus::class)
+                    ->multiple(),
             ])
             ->actions([
                 Tables\Actions\Action::make('maintenance')
@@ -143,6 +163,7 @@ class ServerResource extends Resource
                     ->icon('heroicon-o-wrench-screwdriver')
                     ->color('warning')
                     ->requiresConfirmation()
+                    ->modalIcon('heroicon-o-wrench-screwdriver')
                     ->action(fn (Server $record) => $record->update(['status' => ServerStatus::Maintenance])),
 
                 Tables\Actions\Action::make('drain')
@@ -151,9 +172,13 @@ class ServerResource extends Resource
                     ->color('info')
                     ->requiresConfirmation()
                     ->modalDescription('Isso irá mover todos os containers para outros servidores.')
+                    ->modalIcon('heroicon-o-arrow-down-tray')
                     ->action(fn (Server $record) => $record->update(['status' => ServerStatus::Draining])),
 
-                Tables\Actions\EditAction::make(),
+                Tables\Actions\EditAction::make()
+                    ->color('warning'),
+
+                Tables\Actions\DeleteAction::make(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
