@@ -22,11 +22,13 @@ class OrchestratorClient
 
     public function deploy(Application $app, ?string $commitSha = null): array
     {
+        $environment = $app->getEnvironmentArray();
+
         return $this->http->post('/api/v1/deployments', [
             'application_id' => $app->id,
             'git_repository' => $app->git_repository,
             'git_branch' => $app->git_branch,
-            'commit_sha' => $commitSha,
+            'commit_sha' => $commitSha ?? '',
             'type' => $app->type->value,
             'build_command' => $app->build_command,
             'start_command' => $app->start_command,
@@ -34,7 +36,7 @@ class OrchestratorClient
             'replicas' => $app->replicas,
             'cpu_limit' => $app->cpu_limit,
             'memory_limit' => $app->memory_limit,
-            'environment' => $app->getEnvironmentArray(),
+            'environment' => empty($environment) ? new \stdClass() : $environment,
             'health_check' => $app->health_check,
         ])->throw()->json();
     }
