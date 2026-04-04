@@ -14,6 +14,8 @@ class OrchestratorClient
     {
         $this->http = Http::baseUrl(config('easydeploy.orchestrator_url'))
             ->withToken(config('easydeploy.orchestrator_api_key'))
+            ->asJson()
+            ->accept('application/json')
             ->timeout(30)
             ->retry(3, 100);
     }
