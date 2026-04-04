@@ -14,10 +14,11 @@ class MonitoringStatsWidget extends BaseWidget
 
     protected int|string|array $columnSpan = 'full';
 
-    protected static bool $isLazy = false;
+    protected static bool $isLazy = true;
 
     protected function getStats(): array
     {
+        // Estatísticas atuais
         $onlineServers = Server::where('status', 'online')->count();
         $totalServers = Server::count();
         $avgCpu = Server::where('status', 'online')->avg('cpu_used') ?? 0;
@@ -27,24 +28,42 @@ class MonitoringStatsWidget extends BaseWidget
         $failedToday = Deployment::whereDate('created_at', today())->where('status', 'failed')->count();
         $successToday = Deployment::whereDate('created_at', today())->where('status', 'running')->count();
 
+        // Dados históricos dos últimos 7 dias para mini charts
+        $serversHistoric = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $date = now()->subDays($i);
+            $serversHistoric[] = Server::where('status', 'online')
+                ->where('created_at', '<=', $date)
+                ->count();
+        }
+
+        $cpuHistoric = [];
+        $memoryHistoric = [];
+        for ($i = 6; $i >= 0; $i--) {
+            // Em produção, isso deveria vir de uma tabela de métricas históricas
+            // Por ora, vamos usar valores simulados baseados na média atual
+            $cpuHistoric[] = max(0, min(100, $avgCpu + rand(-10, 10)));
+            $memoryHistoric[] = max(0, min(100, $avgMemory + rand(-10, 10)));
+        }
+
         return [
             Stat::make('Servidores Online', $onlineServers.'/'.$totalServers)
                 ->description($totalServers - $onlineServers > 0 ? ($totalServers - $onlineServers).' offline' : 'Todos online')
                 ->descriptionIcon($totalServers - $onlineServers > 0 ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-check-circle')
                 ->color($onlineServers === $totalServers ? 'success' : 'danger')
-                ->chart([7, 3, 4, 5, 6, 3, 5]),
+                ->chart($serversHistoric),
 
             Stat::make('CPU Médio', number_format($avgCpu, 1).'%')
                 ->description($avgCpu > 80 ? 'Alta utilização' : 'Utilização normal')
                 ->descriptionIcon($avgCpu > 80 ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-cpu-chip')
                 ->color($avgCpu > 80 ? 'danger' : ($avgCpu > 60 ? 'warning' : 'success'))
-                ->chart([65, 59, 80, 81, 56, 55, (int) $avgCpu]),
+                ->chart($cpuHistoric),
 
             Stat::make('Memória Média', number_format($avgMemory, 1).'%')
                 ->description($avgMemory > 80 ? 'Alta utilização' : 'Utilização normal')
                 ->descriptionIcon($avgMemory > 80 ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-circle-stack')
                 ->color($avgMemory > 80 ? 'danger' : ($avgMemory > 60 ? 'warning' : 'success'))
-                ->chart([45, 52, 48, 61, 58, 55, (int) $avgMemory]),
+                ->chart($memoryHistoric),
 
             Stat::make('Containers', $runningContainers)
                 ->description($unhealthyContainers > 0 ? $unhealthyContainers.' não saudáveis' : 'Todos saudáveis')

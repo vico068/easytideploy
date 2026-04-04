@@ -63,16 +63,18 @@ class ResourceUsageChart extends ChartWidget
                 [
                     'label' => 'CPU (%)',
                     'data' => $data->pluck('avg_cpu')->map(fn ($v) => round($v, 2))->toArray(),
-                    'borderColor' => '#3b82f6',
-                    'backgroundColor' => 'rgba(59, 130, 246, 0.1)',
+                    'borderColor' => '#0d8bfa',  // Brand color
+                    'backgroundColor' => 'rgba(13, 139, 250, 0.1)',
                     'fill' => true,
+                    'tension' => 0.3,  // Linha suavizada
                 ],
                 [
                     'label' => 'Memória (%)',
                     'data' => $data->pluck('avg_memory')->map(fn ($v) => round($v, 2))->toArray(),
-                    'borderColor' => '#10b981',
-                    'backgroundColor' => 'rgba(16, 185, 129, 0.1)',
+                    'borderColor' => '#06b6d4',  // Cyan color
+                    'backgroundColor' => 'rgba(6, 182, 212, 0.1)',
                     'fill' => true,
+                    'tension' => 0.3,  // Linha suavizada
                 ],
             ],
             'labels' => $labels,
