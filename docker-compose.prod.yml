@@ -149,6 +149,13 @@ services:
       QUEUE_CONNECTION: redis
       EASYDEPLOY_ORCHESTRATOR_URL: http://orchestrator:8080
       EASYDEPLOY_API_KEY: ${ORCHESTRATOR_API_KEY}
+    volumes:
+      - ./panel/app:/var/www/html/app
+      - ./panel/config:/var/www/html/config
+      - ./panel/database:/var/www/html/database
+      - ./panel/resources:/var/www/html/resources
+      - ./panel/routes:/var/www/html/routes
+      - ./panel/bootstrap:/var/www/html/bootstrap
     depends_on:
       postgres:
         condition: service_healthy
