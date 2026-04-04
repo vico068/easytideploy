@@ -7,6 +7,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/docker/docker/api/types"
 	"github.com/easyti/easydeploy/agent/internal/config"
 	"github.com/easyti/easydeploy/agent/internal/docker"
 	"github.com/rs/zerolog/log"
@@ -392,12 +393,4 @@ func (s *agentService) Ping(ctx context.Context, req *Empty) (*PingResponse, err
 		Version:   s.config.Version,
 		ServerId:  s.config.ServerID,
 	}, nil
-}
-
-// Import types from docker package
-type types = struct{}
-
-func init() {
-	// Register types - this is a placeholder
-	// In production, actual protobuf types would be used
 }

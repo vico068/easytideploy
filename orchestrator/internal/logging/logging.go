@@ -229,20 +229,24 @@ func L(ctx context.Context) *Event {
 
 // Info logs an info message with context
 func Info(ctx context.Context, msg string) {
-	FromContext(ctx).Info().Msg(msg)
+	l := FromContext(ctx)
+	l.Info().Msg(msg)
 }
 
 // Warn logs a warning message with context
 func Warn(ctx context.Context, msg string) {
-	FromContext(ctx).Warn().Msg(msg)
+	l := FromContext(ctx)
+	l.Warn().Msg(msg)
 }
 
 // Error logs an error message with context
 func Error(ctx context.Context, err error, msg string) {
-	FromContext(ctx).Error().Err(err).Msg(msg)
+	l := FromContext(ctx)
+	l.Error().Err(err).Msg(msg)
 }
 
 // Debug logs a debug message with context
 func Debug(ctx context.Context, msg string) {
-	FromContext(ctx).Debug().Msg(msg)
+	l := FromContext(ctx)
+	l.Debug().Msg(msg)
 }

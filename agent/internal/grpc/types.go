@@ -1,6 +1,8 @@
 package grpc
 
 import (
+	"context"
+
 	"google.golang.org/grpc"
 )
 
@@ -193,20 +195,20 @@ type PingResponse struct {
 
 // AgentServiceServer is the server API for AgentService
 type AgentServiceServer interface {
-	CreateContainer(ctx interface{}, req *CreateContainerRequest) (*CreateContainerResponse, error)
-	StartContainer(ctx interface{}, req *ContainerRequest) (*ContainerResponse, error)
-	StopContainer(ctx interface{}, req *ContainerRequest) (*ContainerResponse, error)
-	RestartContainer(ctx interface{}, req *ContainerRequest) (*ContainerResponse, error)
-	RemoveContainer(ctx interface{}, req *ContainerRequest) (*ContainerResponse, error)
-	GetContainerLogs(ctx interface{}, req *GetLogsRequest) (*GetLogsResponse, error)
+	CreateContainer(ctx context.Context, req *CreateContainerRequest) (*CreateContainerResponse, error)
+	StartContainer(ctx context.Context, req *ContainerRequest) (*ContainerResponse, error)
+	StopContainer(ctx context.Context, req *ContainerRequest) (*ContainerResponse, error)
+	RestartContainer(ctx context.Context, req *ContainerRequest) (*ContainerResponse, error)
+	RemoveContainer(ctx context.Context, req *ContainerRequest) (*ContainerResponse, error)
+	GetContainerLogs(ctx context.Context, req *GetLogsRequest) (*GetLogsResponse, error)
 	StreamContainerLogs(req *GetLogsRequest, stream AgentService_StreamContainerLogsServer) error
-	GetContainerStats(ctx interface{}, req *ContainerRequest) (*ContainerStats, error)
-	HealthCheck(ctx interface{}, req *HealthCheckRequest) (*HealthCheckResponse, error)
-	ListContainers(ctx interface{}, req *ListContainersRequest) (*ListContainersResponse, error)
-	PullImage(ctx interface{}, req *PullImageRequest) (*PullImageResponse, error)
-	ExecCommand(ctx interface{}, req *ExecRequest) (*ExecResponse, error)
-	GetServerMetrics(ctx interface{}, req *Empty) (*ServerMetrics, error)
-	Ping(ctx interface{}, req *Empty) (*PingResponse, error)
+	GetContainerStats(ctx context.Context, req *ContainerRequest) (*ContainerStats, error)
+	HealthCheck(ctx context.Context, req *HealthCheckRequest) (*HealthCheckResponse, error)
+	ListContainers(ctx context.Context, req *ListContainersRequest) (*ListContainersResponse, error)
+	PullImage(ctx context.Context, req *PullImageRequest) (*PullImageResponse, error)
+	ExecCommand(ctx context.Context, req *ExecRequest) (*ExecResponse, error)
+	GetServerMetrics(ctx context.Context, req *Empty) (*ServerMetrics, error)
+	Ping(ctx context.Context, req *Empty) (*PingResponse, error)
 }
 
 // AgentService_StreamContainerLogsServer is the server streaming interface for logs
@@ -218,46 +220,46 @@ type AgentService_StreamContainerLogsServer interface {
 // UnimplementedAgentServiceServer can be embedded for forward compatibility
 type UnimplementedAgentServiceServer struct{}
 
-func (UnimplementedAgentServiceServer) CreateContainer(interface{}, *CreateContainerRequest) (*CreateContainerResponse, error) {
+func (UnimplementedAgentServiceServer) CreateContainer(context.Context, *CreateContainerRequest) (*CreateContainerResponse, error) {
 	return nil, nil
 }
-func (UnimplementedAgentServiceServer) StartContainer(interface{}, *ContainerRequest) (*ContainerResponse, error) {
+func (UnimplementedAgentServiceServer) StartContainer(context.Context, *ContainerRequest) (*ContainerResponse, error) {
 	return nil, nil
 }
-func (UnimplementedAgentServiceServer) StopContainer(interface{}, *ContainerRequest) (*ContainerResponse, error) {
+func (UnimplementedAgentServiceServer) StopContainer(context.Context, *ContainerRequest) (*ContainerResponse, error) {
 	return nil, nil
 }
-func (UnimplementedAgentServiceServer) RestartContainer(interface{}, *ContainerRequest) (*ContainerResponse, error) {
+func (UnimplementedAgentServiceServer) RestartContainer(context.Context, *ContainerRequest) (*ContainerResponse, error) {
 	return nil, nil
 }
-func (UnimplementedAgentServiceServer) RemoveContainer(interface{}, *ContainerRequest) (*ContainerResponse, error) {
+func (UnimplementedAgentServiceServer) RemoveContainer(context.Context, *ContainerRequest) (*ContainerResponse, error) {
 	return nil, nil
 }
-func (UnimplementedAgentServiceServer) GetContainerLogs(interface{}, *GetLogsRequest) (*GetLogsResponse, error) {
+func (UnimplementedAgentServiceServer) GetContainerLogs(context.Context, *GetLogsRequest) (*GetLogsResponse, error) {
 	return nil, nil
 }
 func (UnimplementedAgentServiceServer) StreamContainerLogs(*GetLogsRequest, AgentService_StreamContainerLogsServer) error {
 	return nil
 }
-func (UnimplementedAgentServiceServer) GetContainerStats(interface{}, *ContainerRequest) (*ContainerStats, error) {
+func (UnimplementedAgentServiceServer) GetContainerStats(context.Context, *ContainerRequest) (*ContainerStats, error) {
 	return nil, nil
 }
-func (UnimplementedAgentServiceServer) HealthCheck(interface{}, *HealthCheckRequest) (*HealthCheckResponse, error) {
+func (UnimplementedAgentServiceServer) HealthCheck(context.Context, *HealthCheckRequest) (*HealthCheckResponse, error) {
 	return nil, nil
 }
-func (UnimplementedAgentServiceServer) ListContainers(interface{}, *ListContainersRequest) (*ListContainersResponse, error) {
+func (UnimplementedAgentServiceServer) ListContainers(context.Context, *ListContainersRequest) (*ListContainersResponse, error) {
 	return nil, nil
 }
-func (UnimplementedAgentServiceServer) PullImage(interface{}, *PullImageRequest) (*PullImageResponse, error) {
+func (UnimplementedAgentServiceServer) PullImage(context.Context, *PullImageRequest) (*PullImageResponse, error) {
 	return nil, nil
 }
-func (UnimplementedAgentServiceServer) ExecCommand(interface{}, *ExecRequest) (*ExecResponse, error) {
+func (UnimplementedAgentServiceServer) ExecCommand(context.Context, *ExecRequest) (*ExecResponse, error) {
 	return nil, nil
 }
-func (UnimplementedAgentServiceServer) GetServerMetrics(interface{}, *Empty) (*ServerMetrics, error) {
+func (UnimplementedAgentServiceServer) GetServerMetrics(context.Context, *Empty) (*ServerMetrics, error) {
 	return nil, nil
 }
-func (UnimplementedAgentServiceServer) Ping(interface{}, *Empty) (*PingResponse, error) {
+func (UnimplementedAgentServiceServer) Ping(context.Context, *Empty) (*PingResponse, error) {
 	return nil, nil
 }
 
