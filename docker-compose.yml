@@ -191,7 +191,7 @@ services:
       APP_ENV: ${APP_ENV:-local}
       APP_KEY: ${APP_KEY:-base64:CHANGE_ME_GENERATE_WITH_ARTISAN}
       APP_DEBUG: "${APP_DEBUG:-true}"
-      APP_URL: ${APP_URL:-http://localhost:8000}
+      APP_URL: ${APP_URL:-https://${PANEL_DOMAIN:-localhost}}
       DB_CONNECTION: pgsql
       DB_HOST: postgres
       DB_PORT: 5432
