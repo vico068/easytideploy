@@ -133,7 +133,7 @@ services:
       APP_NAME: EasyDeploy
       APP_ENV: production
       APP_KEY: ${APP_KEY}
-      APP_DEBUG: "false"
+      APP_DEBUG: ${APP_DEBUG:-false}
       APP_URL: https://deploy.${DOMAIN}
       DB_CONNECTION: pgsql
       DB_HOST: postgres
