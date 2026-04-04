@@ -93,12 +93,16 @@ class Application extends Model
 
     public function latestDeployment(): HasOne
     {
-        return $this->hasOne(Deployment::class)->latestOfMany('created_at');
+        return $this->hasOne(Deployment::class)->latestOfMany([
+            'created_at' => 'max',
+        ]);
     }
 
     public function runningDeployment(): HasOne
     {
-        return $this->hasOne(Deployment::class)->where('status', 'running')->latestOfMany('created_at');
+        return $this->hasOne(Deployment::class)->where('status', 'running')->latestOfMany([
+            'created_at' => 'max',
+        ]);
     }
 
     public function containers(): HasMany
