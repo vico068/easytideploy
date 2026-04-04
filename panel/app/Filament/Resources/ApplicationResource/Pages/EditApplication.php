@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\ApplicationResource\Pages;
 
 use App\Filament\Resources\ApplicationResource;
+use App\Services\DeploymentService;
 use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
@@ -43,11 +44,22 @@ class EditApplication extends EditRecord
 
     protected function triggerDeploy(): void
     {
-        // TODO: Implement via OrchestratorClient
-        Notification::make()
-            ->success()
-            ->title('Deploy iniciado com sucesso!')
-            ->send();
+        try {
+            $deploymentService = app(DeploymentService::class);
+            $deployment = $deploymentService->trigger($this->record);
+
+            Notification::make()
+                ->success()
+                ->title('Deploy iniciado!')
+                ->body("Deployment #{$deployment->id} enfileirado.")
+                ->send();
+        } catch (\Exception $e) {
+            Notification::make()
+                ->danger()
+                ->title('Erro ao iniciar deploy')
+                ->body($e->getMessage())
+                ->send();
+        }
     }
 
     protected function stopApplication(): void
