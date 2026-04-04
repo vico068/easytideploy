@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
@@ -303,7 +304,7 @@ func (b *ImageBuilder) Push(ctx context.Context, opts PushOptions, logCallback f
 	}
 
 	// Push image
-	response, err := b.client.ImagePush(ctx, registryImage, types.ImagePushOptions{
+	response, err := b.client.ImagePush(ctx, registryImage, image.PushOptions{
 		RegistryAuth: authStr,
 	})
 	if err != nil {
@@ -348,7 +349,7 @@ func (b *ImageBuilder) Push(ctx context.Context, opts PushOptions, logCallback f
 
 // RemoveImage removes a local image
 func (b *ImageBuilder) RemoveImage(ctx context.Context, imageID string, force bool) error {
-	_, err := b.client.ImageRemove(ctx, imageID, types.ImageRemoveOptions{
+	_, err := b.client.ImageRemove(ctx, imageID, image.RemoveOptions{
 		Force:         force,
 		PruneChildren: true,
 	})

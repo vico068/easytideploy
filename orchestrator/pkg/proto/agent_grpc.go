@@ -237,7 +237,7 @@ func (x *agentServiceGetContainerLogsClient) Recv() (*LogLine, error) {
 }
 
 func (c *agentServiceClient) GetContainerLogs(ctx context.Context, in *GetLogsRequest, opts ...grpc.CallOption) (AgentService_GetContainerLogsClient, error) {
-	stream, err := c.cc.NewStream(ctx, &agentServiceGetContainerLogsStreamDesc, "/agent.AgentService/GetContainerLogs", opts...)
+	stream, err := c.cc.NewStream(ctx, agentServiceGetContainerLogsStreamDesc, "/agent.AgentService/GetContainerLogs", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -302,7 +302,7 @@ func (x *agentServiceBuildImageClient) Recv() (*BuildOutput, error) {
 }
 
 func (c *agentServiceClient) BuildImage(ctx context.Context, in *BuildImageRequest, opts ...grpc.CallOption) (AgentService_BuildImageClient, error) {
-	stream, err := c.cc.NewStream(ctx, &agentServiceBuildImageStreamDesc, "/agent.AgentService/BuildImage", opts...)
+	stream, err := c.cc.NewStream(ctx, agentServiceBuildImageStreamDesc, "/agent.AgentService/BuildImage", opts...)
 	if err != nil {
 		return nil, err
 	}
