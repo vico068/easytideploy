@@ -4,6 +4,7 @@ namespace App\Filament\Resources\ApplicationResource\Pages;
 
 use App\Filament\Resources\ApplicationResource;
 use Filament\Actions;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
 
 class EditApplication extends EditRecord
@@ -43,18 +44,27 @@ class EditApplication extends EditRecord
     protected function triggerDeploy(): void
     {
         // TODO: Implement via OrchestratorClient
-        $this->notify('success', 'Deploy iniciado com sucesso!');
+        Notification::make()
+            ->success()
+            ->title('Deploy iniciado com sucesso!')
+            ->send();
     }
 
     protected function stopApplication(): void
     {
         // TODO: Implement via OrchestratorClient
-        $this->notify('success', 'Aplicação parada com sucesso!');
+        Notification::make()
+            ->success()
+            ->title('Aplicação parada com sucesso!')
+            ->send();
     }
 
     protected function restartApplication(): void
     {
         // TODO: Implement via OrchestratorClient
-        $this->notify('success', 'Aplicação reiniciada com sucesso!');
+        Notification::make()
+            ->success()
+            ->title('Aplicação reiniciada com sucesso!')
+            ->send();
     }
 }
