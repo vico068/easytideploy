@@ -602,6 +602,8 @@ VERSION=${VERSION}
 
 # --- Dominio ---
 DOMAIN=${DOMAIN}
+PANEL_DOMAIN=${PANEL_DOMAIN}
+API_DOMAIN=${API_DOMAIN}
 
 # --- Banco de dados (PostgreSQL) ---
 DB_CONNECTION=pgsql
