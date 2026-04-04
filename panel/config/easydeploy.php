@@ -8,9 +8,9 @@ return [
     |--------------------------------------------------------------------------
     */
 
-    'orchestrator_url' => env('ORCHESTRATOR_URL', 'http://localhost:8080'),
+    'orchestrator_url' => env('EASYDEPLOY_ORCHESTRATOR_URL', 'http://localhost:8080'),
 
-    'orchestrator_api_key' => env('ORCHESTRATOR_API_KEY'),
+    'orchestrator_api_key' => env('EASYDEPLOY_API_KEY'),
 
     /*
     |--------------------------------------------------------------------------
