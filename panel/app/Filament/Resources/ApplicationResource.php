@@ -268,6 +268,18 @@ class ApplicationResource extends Resource
 
     protected static function triggerDeploy(Application $record): void
     {
-        // TODO: Implement deployment trigger via OrchestratorClient
+        $deployment = $record->deployments()->create([
+            'status' => 'pending',
+            'triggered_by' => 'manual',
+            'started_at' => now(),
+        ]);
+
+        // TODO: Send deployment request to OrchestratorClient
+
+        \Filament\Notifications\Notification::make()
+            ->title('Deploy iniciado')
+            ->body("Deploy #{$deployment->id} foi criado com sucesso.")
+            ->success()
+            ->send();
     }
 }
