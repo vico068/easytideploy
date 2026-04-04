@@ -99,7 +99,7 @@ type HealthCheckRequest struct {
 
 // HealthCheckResponse contains health check result
 type HealthCheckResponse struct {
-	Healthy       bool
+	Healthy       bool    `json:"IsHealthy"` // marshaled as "IsHealthy" to match orchestrator's field name
 	Status        string
 	HealthStatus  string
 	Message       string
@@ -263,8 +263,170 @@ func (UnimplementedAgentServiceServer) Ping(context.Context, *Empty) (*PingRespo
 	return nil, nil
 }
 
-// RegisterAgentServiceServer registers the server
+// RegisterAgentServiceServer registers the server with the gRPC server.
 func RegisterAgentServiceServer(s *grpc.Server, srv AgentServiceServer) {
-	// In production, this would use generated registration code
-	// For now, we use reflection-based registration
+	s.RegisterService(&AgentService_ServiceDesc, srv)
+}
+
+// AgentService_ServiceDesc is the service descriptor.
+// Method names match the orchestrator's proto client calls (/agent.AgentService/...).
+var AgentService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "agent.AgentService",
+	HandlerType: (*AgentServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{MethodName: "CreateContainer", Handler: _AgentService_CreateContainer_Handler},
+		{MethodName: "RemoveContainer", Handler: _AgentService_RemoveContainer_Handler},
+		{MethodName: "StartContainer", Handler: _AgentService_StartContainer_Handler},
+		{MethodName: "StopContainer", Handler: _AgentService_StopContainer_Handler},
+		{MethodName: "RestartContainer", Handler: _AgentService_RestartContainer_Handler},
+		// Orchestrator calls "CheckHealth" but agent interface uses "HealthCheck"
+		{MethodName: "CheckHealth", Handler: _AgentService_CheckHealth_Handler},
+		// Orchestrator calls "GetServerStats" but agent interface uses "GetServerMetrics"
+		{MethodName: "GetServerStats", Handler: _AgentService_GetServerStats_Handler},
+		{MethodName: "PullImage", Handler: _AgentService_PullImage_Handler},
+	},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "GetContainerLogs",
+			Handler:       _AgentService_GetContainerLogs_Handler,
+			ServerStreams: true,
+		},
+	},
+	Metadata: "agent.proto",
+}
+
+func _AgentService_CreateContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateContainerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).CreateContainer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/agent.AgentService/CreateContainer"}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).CreateContainer(ctx, req.(*CreateContainerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_RemoveContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).RemoveContainer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/agent.AgentService/RemoveContainer"}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).RemoveContainer(ctx, req.(*ContainerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_StartContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).StartContainer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/agent.AgentService/StartContainer"}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).StartContainer(ctx, req.(*ContainerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_StopContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).StopContainer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/agent.AgentService/StopContainer"}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).StopContainer(ctx, req.(*ContainerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_RestartContainer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).RestartContainer(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/agent.AgentService/RestartContainer"}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).RestartContainer(ctx, req.(*ContainerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_CheckHealth_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HealthCheckRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).HealthCheck(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/agent.AgentService/CheckHealth"}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).HealthCheck(ctx, req.(*HealthCheckRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_GetServerStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).GetServerMetrics(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/agent.AgentService/GetServerStats"}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).GetServerMetrics(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_PullImage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PullImageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).PullImage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/agent.AgentService/PullImage"}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).PullImage(ctx, req.(*PullImageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_GetContainerLogs_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetLogsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(AgentServiceServer).StreamContainerLogs(m, &agentServiceStreamLogsServer{stream})
+}
+
+type agentServiceStreamLogsServer struct {
+	grpc.ServerStream
+}
+
+func (x *agentServiceStreamLogsServer) Send(m *LogLine) error {
+	return x.ServerStream.SendMsg(m)
 }

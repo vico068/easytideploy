@@ -57,12 +57,6 @@ func (c *AgentClient) Close() error {
 
 // CreateContainer creates a new container on the agent
 func (c *AgentClient) CreateContainer(ctx context.Context, req *DeployRequest) (string, error) {
-	// Convert labels map to slice
-	var labels []string
-	for k, v := range req.Labels {
-		labels = append(labels, fmt.Sprintf("%s=%s", k, v))
-	}
-
 	response, err := c.client.CreateContainer(ctx, &proto.CreateContainerRequest{
 		Image:       req.ImageName,
 		Name:        req.Name,
@@ -70,7 +64,7 @@ func (c *AgentClient) CreateContainer(ctx context.Context, req *DeployRequest) (
 		Environment: req.EnvVars,
 		CpuLimit:    req.CPULimit,
 		MemoryLimit: req.MemLimit,
-		Labels:      labels,
+		Labels:      req.Labels,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create container: %w", err)

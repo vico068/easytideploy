@@ -20,15 +20,16 @@ type HealthCheckConfig struct {
 }
 
 // CreateContainerRequest represents a request to create a container
+// JSON tags align with the agent's field names for wire compatibility.
 type CreateContainerRequest struct {
-	Image       string
-	Name        string
-	Port        int32
-	Environment map[string]string
-	CpuLimit    int64
-	MemoryLimit int64
-	HealthCheck *HealthCheckConfig
-	Labels      []string
+	Image       string            `json:"ImageName"`
+	Name        string            `json:"Name"`
+	Port        int32             `json:"Port"`
+	Environment map[string]string `json:"EnvVars"`
+	CpuLimit    int64             `json:"CpuLimit"`
+	MemoryLimit int64             `json:"MemLimit"`
+	HealthCheck *HealthCheckConfig `json:"HealthCheck,omitempty"`
+	Labels      map[string]string `json:"Labels"`
 }
 
 // CreateContainerResponse represents the response from creating a container
@@ -124,8 +125,8 @@ type ServerStatsResponse struct {
 
 // PullImageRequest represents a request to pull an image
 type PullImageRequest struct {
-	Image        string
-	RegistryAuth string
+	Image        string `json:"ImageName"`
+	RegistryAuth string `json:"RegistryAuth"`
 }
 
 // PullImageResponse represents the response from pulling an image
