@@ -2,7 +2,6 @@ package traefik
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,93 +12,94 @@ import (
 	"github.com/easyti/easydeploy/orchestrator/internal/config"
 	"github.com/easyti/easydeploy/orchestrator/internal/database"
 	"github.com/rs/zerolog/log"
+	"gopkg.in/yaml.v3"
 )
 
 // Router represents a Traefik HTTP router
 type Router struct {
-	Rule        string   `json:"rule"`
-	Service     string   `json:"service"`
-	EntryPoints []string `json:"entryPoints"`
-	TLS         *TLS     `json:"tls,omitempty"`
-	Middlewares []string `json:"middlewares,omitempty"`
-	Priority    int      `json:"priority,omitempty"`
+	Rule        string   `yaml:"rule"`
+	Service     string   `yaml:"service"`
+	EntryPoints []string `yaml:"entryPoints"`
+	TLS         *TLS     `yaml:"tls,omitempty"`
+	Middlewares []string `yaml:"middlewares,omitempty"`
+	Priority    int      `yaml:"priority,omitempty"`
 }
 
 // TLS represents TLS configuration
 type TLS struct {
-	CertResolver string `json:"certResolver,omitempty"`
+	CertResolver string `yaml:"certResolver,omitempty"`
 }
 
 // Service represents a Traefik service
 type Service struct {
-	LoadBalancer *LoadBalancer `json:"loadBalancer"`
+	LoadBalancer *LoadBalancer `yaml:"loadBalancer"`
 }
 
 // LoadBalancer represents a load balancer configuration
 type LoadBalancer struct {
-	Servers        []Server       `json:"servers"`
-	HealthCheck    *HealthCheck   `json:"healthCheck,omitempty"`
-	PassHostHeader bool           `json:"passHostHeader"`
-	Sticky         *Sticky        `json:"sticky,omitempty"`
+	Servers        []Server     `yaml:"servers"`
+	HealthCheck    *HealthCheck `yaml:"healthCheck,omitempty"`
+	PassHostHeader bool         `yaml:"passHostHeader"`
+	Sticky         *Sticky      `yaml:"sticky,omitempty"`
 }
 
 // Server represents a backend server
 type Server struct {
-	URL string `json:"url"`
+	URL string `yaml:"url"`
 }
 
 // HealthCheck represents a health check configuration
 type HealthCheck struct {
-	Path     string `json:"path"`
-	Interval string `json:"interval"`
-	Timeout  string `json:"timeout"`
+	Path     string `yaml:"path"`
+	Interval string `yaml:"interval"`
+	Timeout  string `yaml:"timeout"`
 }
 
 // Sticky represents sticky session configuration
 type Sticky struct {
-	Cookie *Cookie `json:"cookie,omitempty"`
+	Cookie *Cookie `yaml:"cookie,omitempty"`
 }
 
 // Cookie represents sticky cookie configuration
 type Cookie struct {
-	Name     string `json:"name"`
-	Secure   bool   `json:"secure"`
-	HTTPOnly bool   `json:"httpOnly"`
+	Name     string `yaml:"name"`
+	Secure   bool   `yaml:"secure"`
+	HTTPOnly bool   `yaml:"httpOnly"`
 }
 
 // Middleware represents a Traefik middleware
 type Middleware struct {
-	StripPrefix   *StripPrefix   `json:"stripPrefix,omitempty"`
-	Headers       *Headers       `json:"headers,omitempty"`
-	RateLimit     *RateLimit     `json:"rateLimit,omitempty"`
-	Retry         *Retry         `json:"retry,omitempty"`
-	Compress      *Compress      `json:"compress,omitempty"`
-	RedirectScheme *RedirectScheme `json:"redirectScheme,omitempty"`
+	StripPrefix    *StripPrefix    `yaml:"stripPrefix,omitempty"`
+	Headers        *Headers        `yaml:"headers,omitempty"`
+	RateLimit      *RateLimit      `yaml:"rateLimit,omitempty"`
+	Retry          *Retry          `yaml:"retry,omitempty"`
+	Compress       *Compress       `yaml:"compress,omitempty"`
+	RedirectScheme *RedirectScheme `yaml:"redirectScheme,omitempty"`
 }
 
 // StripPrefix represents strip prefix middleware
 type StripPrefix struct {
-	Prefixes []string `json:"prefixes"`
+	Prefixes []string `yaml:"prefixes"`
 }
 
 // Headers represents headers middleware
 type Headers struct {
-	CustomRequestHeaders  map[string]string `json:"customRequestHeaders,omitempty"`
-	CustomResponseHeaders map[string]string `json:"customResponseHeaders,omitempty"`
-	AccessControlAllowOriginList []string `json:"accessControlAllowOriginList,omitempty"`
-	AccessControlAllowMethods    []string `json:"accessControlAllowMethods,omitempty"`
-	AccessControlAllowHeaders    []string `json:"accessControlAllowHeaders,omitempty"`
+	CustomRequestHeaders         map[string]string `yaml:"customRequestHeaders,omitempty"`
+	CustomResponseHeaders        map[string]string `yaml:"customResponseHeaders,omitempty"`
+	AccessControlAllowOriginList []string          `yaml:"accessControlAllowOriginList,omitempty"`
+	AccessControlAllowMethods    []string          `yaml:"accessControlAllowMethods,omitempty"`
+	AccessControlAllowHeaders    []string          `yaml:"accessControlAllowHeaders,omitempty"`
 }
 
 // RateLimit represents rate limiting middleware
 type RateLimit struct {
-	Average int `json:"average"`
-	Burst   int `json:"burst"`
+	Average int `yaml:"average"`
+	Burst   int `yaml:"burst"`
 }
 
 // Retry represents retry middleware
 type Retry struct {
-	Attempts int `json:"attempts"`
+	Attempts int `yaml:"attempts"`
 }
 
 // Compress represents compression middleware
@@ -107,20 +107,20 @@ type Compress struct{}
 
 // RedirectScheme represents redirect scheme middleware
 type RedirectScheme struct {
-	Scheme    string `json:"scheme"`
-	Permanent bool   `json:"permanent"`
+	Scheme    string `yaml:"scheme"`
+	Permanent bool   `yaml:"permanent"`
 }
 
 // DynamicConfig represents the complete Traefik dynamic configuration
 type DynamicConfig struct {
-	HTTP *HTTPConfig `json:"http"`
+	HTTP *HTTPConfig `yaml:"http"`
 }
 
 // HTTPConfig represents HTTP configuration
 type HTTPConfig struct {
-	Routers     map[string]*Router     `json:"routers,omitempty"`
-	Services    map[string]*Service    `json:"services,omitempty"`
-	Middlewares map[string]*Middleware `json:"middlewares,omitempty"`
+	Routers     map[string]*Router     `yaml:"routers,omitempty"`
+	Services    map[string]*Service    `yaml:"services,omitempty"`
+	Middlewares map[string]*Middleware `yaml:"middlewares,omitempty"`
 }
 
 // ConfigGenerator generates Traefik dynamic configurations
@@ -390,10 +390,10 @@ func (g *ConfigGenerator) writeConfig(applicationID string, config *DynamicConfi
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	// Write configuration file
-	filename := filepath.Join(g.configDir, fmt.Sprintf("app-%s.json", applicationID))
+	// Write configuration file in YAML (Traefik file provider doesn't support JSON in directory mode)
+	filename := filepath.Join(g.configDir, fmt.Sprintf("app-%s.yml", applicationID))
 
-	data, err := json.MarshalIndent(config, "", "  ")
+	data, err := yaml.Marshal(config)
 	if err != nil {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
@@ -401,6 +401,10 @@ func (g *ConfigGenerator) writeConfig(applicationID string, config *DynamicConfi
 	if err := os.WriteFile(filename, data, 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
+
+	// Remove old JSON config if it exists
+	oldJSON := filepath.Join(g.configDir, fmt.Sprintf("app-%s.json", applicationID))
+	os.Remove(oldJSON)
 
 	log.Info().Str("file", filename).Msg("Traefik configuration updated")
 	return nil
@@ -411,11 +415,15 @@ func (g *ConfigGenerator) RemoveConfig(applicationID string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	filename := filepath.Join(g.configDir, fmt.Sprintf("app-%s.json", applicationID))
+	filename := filepath.Join(g.configDir, fmt.Sprintf("app-%s.yml", applicationID))
 
 	if err := os.Remove(filename); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove config file: %w", err)
 	}
+
+	// Also remove old JSON config if it exists
+	oldJSON := filepath.Join(g.configDir, fmt.Sprintf("app-%s.json", applicationID))
+	os.Remove(oldJSON)
 
 	log.Info().Str("file", filename).Msg("Traefik configuration removed")
 	return nil
