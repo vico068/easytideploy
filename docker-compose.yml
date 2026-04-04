@@ -207,7 +207,6 @@ services:
     build:
       context: ./panel
       dockerfile: Dockerfile
-    container_name: easydeploy-queue-worker
     restart: unless-stopped
     command: php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
     environment:

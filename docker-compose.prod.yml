@@ -182,7 +182,6 @@ services:
 
   queue-worker:
     image: easydeploy/panel:${VERSION:-latest}
-    container_name: easydeploy-queue-worker
     restart: always
     command: php artisan queue:work redis --sleep=3 --tries=3 --max-time=3600
     environment:
