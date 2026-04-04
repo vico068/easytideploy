@@ -244,7 +244,7 @@ func (g *ConfigGenerator) getDomains(ctx context.Context, applicationID string) 
 
 func (g *ConfigGenerator) getRunningContainers(ctx context.Context, applicationID string) ([]*Container, error) {
 	query := `
-		SELECT c.id, c.docker_container_id, c.server_id, s.ip_address, c.host_port, c.internal_port
+		SELECT c.id, c.docker_container_id, c.server_id, s.ip_address, COALESCE(c.host_port, 0), COALESCE(c.internal_port, 0)
 		FROM containers c
 		JOIN servers s ON c.server_id = s.id
 		WHERE c.application_id = $1 AND c.status = 'running' AND c.health_status = 'healthy'
@@ -260,6 +260,7 @@ func (g *ConfigGenerator) getRunningContainers(ctx context.Context, applicationI
 	for rows.Next() {
 		var c Container
 		if err := rows.Scan(&c.ID, &c.DockerID, &c.ServerID, &c.ServerIP, &c.HostPort, &c.InternalPort); err != nil {
+			log.Error().Err(err).Msg("Failed to scan container row")
 			continue
 		}
 		containers = append(containers, &c)
