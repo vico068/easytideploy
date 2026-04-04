@@ -56,7 +56,7 @@ func (h *AgentHandler) Heartbeat(w http.ResponseWriter, r *http.Request) {
 		    disk_total = $4,
 		    docker_version = $5,
 		    updated_at = NOW()
-		WHERE id = $1
+		WHERE id = $1::uuid
 	`
 
 	result, err := h.db.Pool().Exec(r.Context(), query, req.ServerID, req.CPUCores, req.MemoryTotal, req.DiskTotal, req.DockerVersion)
@@ -69,10 +69,10 @@ func (h *AgentHandler) Heartbeat(w http.ResponseWriter, r *http.Request) {
 		// Server doesn't exist, create it
 		insertQuery := `
 			INSERT INTO servers (id, name, ip_address, agent_address, status, cpu_cores, memory_total, disk_total, docker_version, last_heartbeat, created_at, updated_at)
-			VALUES ($1, $1, $2, $3, 'online', $4, $5, $6, $7, NOW(), NOW(), NOW())
+			VALUES ($1::uuid, $2, $3, $4, 'online', $5, $6, $7, $8, NOW(), NOW(), NOW())
 		`
 		_, err = h.db.Pool().Exec(r.Context(), insertQuery,
-			req.ServerID, r.RemoteAddr, r.RemoteAddr+":9090",
+			req.ServerID, req.ServerID, r.RemoteAddr, r.RemoteAddr+":9090",
 			req.CPUCores, req.MemoryTotal, req.DiskTotal, req.DockerVersion,
 		)
 		if err != nil {
@@ -84,7 +84,7 @@ func (h *AgentHandler) Heartbeat(w http.ResponseWriter, r *http.Request) {
 	// Record resource usage
 	usageQuery := `
 		INSERT INTO resource_usages (id, server_id, cpu_percent, memory_percent, disk_percent, network_in, network_out, created_at)
-		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW())
+		VALUES (gen_random_uuid(), $1::uuid, $2, $3, $4, $5, $6, NOW())
 	`
 	h.db.Pool().Exec(r.Context(), usageQuery, req.ServerID, req.CPUPercent, req.MemoryPercent, req.DiskPercent, req.NetworkIn, req.NetworkOut)
 
