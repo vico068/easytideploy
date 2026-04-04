@@ -17,10 +17,6 @@ providers:
   file:
     directory: /etc/traefik/dynamic
     watch: true
-  docker:
-    endpoint: "unix:///var/run/docker.sock"
-    exposedByDefault: false
-    network: easydeploy
 
 certificatesResolvers:
   letsencrypt:
