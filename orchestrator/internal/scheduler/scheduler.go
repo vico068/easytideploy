@@ -177,14 +177,15 @@ func (s *Scheduler) handleBuildJob(data []byte) {
 
 // BuildResult contains the result of a build
 type BuildResult struct {
-	ImageName  string
-	ImageTag   string
-	CommitSHA  string
-	CommitMsg  string
-	BuildLogs  string
-	AppType    string
-	AppVersion string
-	Port       int
+	ImageName      string // registry-prefixed name used for push (DockerRegistry)
+	AgentImageName string // registry-prefixed name for agents to pull (AgentRegistry)
+	ImageTag       string
+	CommitSHA      string
+	CommitMsg      string
+	BuildLogs      string
+	AppType        string
+	AppVersion     string
+	Port           int
 }
 
 func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJob, logger *zerolog.Logger) (*BuildResult, error) {
@@ -349,6 +350,7 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 		}
 
 		result.ImageName = fmt.Sprintf("%s/%s", s.cfg.DockerRegistry, imageName)
+		result.AgentImageName = fmt.Sprintf("%s/%s", s.cfg.AgentRegistryAddr(), imageName)
 	}
 
 	return result, nil
@@ -383,7 +385,7 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 
 		// Create container
 		containerID, err := client.CreateContainer(ctx, &DeployRequest{
-			ImageName: fmt.Sprintf("%s:%s", result.ImageName, result.ImageTag),
+			ImageName: fmt.Sprintf("%s:%s", result.AgentImageName, result.ImageTag),
 			Name:      fmt.Sprintf("%s-%s-%d", job.ApplicationID, result.ImageTag[:8], i),
 			EnvVars:   job.Environment,
 			Port:      job.Port,

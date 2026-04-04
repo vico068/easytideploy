@@ -24,6 +24,9 @@ type Config struct {
 	DockerRegistry     string
 	DockerRegistryUser string
 	DockerRegistryPass string
+	// AgentRegistry is the registry address as seen by agents (may differ from DockerRegistry
+	// when the registry binds to localhost but agents are on separate hosts).
+	AgentRegistry string
 
 	// Build
 	BuildTimeout int // seconds
@@ -52,6 +55,7 @@ func Load() (*Config, error) {
 		DockerRegistry:           getEnv("DOCKER_REGISTRY", "registry.easyti.cloud"),
 		DockerRegistryUser:       getEnv("DOCKER_REGISTRY_USER", ""),
 		DockerRegistryPass:       getEnv("DOCKER_REGISTRY_PASS", ""),
+		AgentRegistry:            getEnv("AGENT_REGISTRY", ""),
 		BuildTimeout:             getEnvInt("BUILD_TIMEOUT", 600),
 		MaxRetries:               getEnvInt("MAX_RETRIES", 3),
 		DataDir:                  getEnv("DATA_DIR", "/var/lib/easydeploy"),
@@ -64,6 +68,15 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// AgentRegistryAddr returns the registry address that agents should use to pull images.
+// Falls back to DockerRegistry if AgentRegistry is not configured.
+func (c *Config) AgentRegistryAddr() string {
+	if c.AgentRegistry != "" {
+		return c.AgentRegistry
+	}
+	return c.DockerRegistry
 }
 
 func getEnv(key, defaultValue string) string {
