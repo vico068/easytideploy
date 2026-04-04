@@ -1,4 +1,25 @@
 # Panel Dockerfile - Laravel + Filament
+
+# Stage 1: Build frontend assets
+FROM node:20-alpine AS frontend
+
+WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install dependencies
+RUN npm ci || npm install
+
+# Copy source files needed for build
+COPY resources ./resources
+COPY tailwind.config.js vite.config.js ./
+COPY postcss.config.js* ./
+
+# Build assets
+RUN npm run build
+
+# Stage 2: PHP application
 FROM php:8.3-fpm-alpine AS base
 
 # Install system dependencies
@@ -42,6 +63,9 @@ RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
 
 # Copy application
 COPY . .
+
+# Copy built assets from frontend stage
+COPY --from=frontend /app/public/build ./public/build
 
 RUN composer dump-autoload --optimize
 
