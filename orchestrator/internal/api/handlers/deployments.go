@@ -33,6 +33,7 @@ type CreateDeploymentRequest struct {
 	GitRepository string            `json:"git_repository"`
 	GitBranch     string            `json:"git_branch"`
 	CommitSHA     string            `json:"commit_sha,omitempty"`
+	GitToken      string            `json:"git_token,omitempty"`
 	Type          string            `json:"type"`
 	BuildCommand  string            `json:"build_command"`
 	StartCommand  string            `json:"start_command"`
@@ -42,6 +43,7 @@ type CreateDeploymentRequest struct {
 	MemoryLimit   int               `json:"memory_limit"`
 	Environment   map[string]string `json:"environment"`
 	HealthCheck   *queue.HealthCheck `json:"health_check"`
+	CallbackURL   string            `json:"callback_url,omitempty"`
 }
 
 // List returns all deployments
@@ -156,6 +158,7 @@ func (h *DeploymentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		GitRepository: req.GitRepository,
 		GitBranch:     req.GitBranch,
 		CommitSHA:     req.CommitSHA,
+		GitToken:      req.GitToken,
 		Type:          req.Type,
 		BuildCommand:  req.BuildCommand,
 		StartCommand:  req.StartCommand,
@@ -165,6 +168,7 @@ func (h *DeploymentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		MemoryLimit:   req.MemoryLimit,
 		Environment:   envVars,
 		HealthCheck:   req.HealthCheck,
+		CallbackURL:   req.CallbackURL,
 	}
 
 	if err := h.queue.Enqueue("builds", job); err != nil {

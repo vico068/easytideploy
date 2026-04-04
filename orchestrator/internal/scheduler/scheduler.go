@@ -1,9 +1,11 @@
 package scheduler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"sync"
 	"time"
@@ -149,12 +151,14 @@ func (s *Scheduler) handleBuildJob(data []byte) {
 	if err := s.updateDeploymentStatus(ctx, job.DeploymentID, StatusBuilding, ""); err != nil {
 		logger.Error().Err(err).Msg("Failed to update deployment status")
 	}
+	go s.notifyPanel(job.CallbackURL, StatusBuilding, "", "")
 
 	// Execute build pipeline
 	result, err := s.executeBuildPipeline(ctx, &job, &logger)
 	if err != nil {
 		logger.Error().Err(err).Msg("Build pipeline failed")
 		s.updateDeploymentStatus(ctx, job.DeploymentID, StatusFailed, err.Error())
+		go s.notifyPanel(job.CallbackURL, StatusFailed, err.Error(), "")
 		return
 	}
 
@@ -162,11 +166,13 @@ func (s *Scheduler) handleBuildJob(data []byte) {
 	if err := s.deployContainers(ctx, &job, result, &logger); err != nil {
 		logger.Error().Err(err).Msg("Deployment failed")
 		s.updateDeploymentStatus(ctx, job.DeploymentID, StatusFailed, err.Error())
+		go s.notifyPanel(job.CallbackURL, StatusFailed, err.Error(), result.BuildLogs)
 		return
 	}
 
 	logger.Info().Msg("Build job completed successfully")
 	s.updateDeploymentStatus(ctx, job.DeploymentID, StatusRunning, "")
+	go s.notifyPanel(job.CallbackURL, StatusRunning, "", result.BuildLogs)
 }
 
 // BuildResult contains the result of a build
@@ -192,6 +198,10 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 		Branch:     job.GitBranch,
 		CommitHash: job.CommitSHA,
 		Depth:      1,
+	}
+	if job.GitToken != "" {
+		cloneOpts.Username = "oauth2"
+		cloneOpts.Password = job.GitToken
 	}
 
 	repoPath, err := s.gitCloner.Clone(ctx, cloneOpts)
@@ -418,6 +428,50 @@ func (s *Scheduler) updateDeploymentStatus(ctx context.Context, deploymentID str
 	`
 	_, err := s.db.Pool().Exec(ctx, query, status, errorMsg, deploymentID)
 	return err
+}
+
+func (s *Scheduler) notifyPanel(callbackURL string, status DeploymentStatus, errorMsg string, buildLogs string) {
+	if callbackURL == "" {
+		return
+	}
+
+	payload := map[string]string{
+		"status": string(status),
+	}
+	if errorMsg != "" {
+		payload["error_message"] = errorMsg
+	}
+	if buildLogs != "" {
+		payload["build_logs"] = buildLogs
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to marshal panel callback payload")
+		return
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, callbackURL, bytes.NewReader(data))
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create panel callback request")
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+s.cfg.APIKey)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Error().Err(err).Str("url", callbackURL).Msg("Failed to notify panel of deployment status")
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		log.Error().Int("status", resp.StatusCode).Str("url", callbackURL).Msg("Panel callback returned error")
+	} else {
+		log.Info().Str("url", callbackURL).Str("deployment_status", string(status)).Msg("Panel notified of deployment status")
+	}
 }
 
 func (s *Scheduler) saveContainer(ctx context.Context, deploymentID, appID, serverID, containerID string, replica int) error {

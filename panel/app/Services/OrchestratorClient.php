@@ -20,7 +20,7 @@ class OrchestratorClient
             ->retry(3, 100);
     }
 
-    public function deploy(Application $app, ?string $commitSha = null): array
+    public function deploy(Application $app, ?string $commitSha = null, ?string $callbackUrl = null): array
     {
         $environment = $app->getEnvironmentArray();
 
@@ -29,6 +29,7 @@ class OrchestratorClient
             'git_repository' => $app->git_repository,
             'git_branch' => $app->git_branch,
             'commit_sha' => $commitSha ?? '',
+            'git_token' => $app->git_token ?? '',
             'type' => $app->type->value,
             'build_command' => $app->build_command,
             'start_command' => $app->start_command,
@@ -38,6 +39,7 @@ class OrchestratorClient
             'memory_limit' => $app->memory_limit,
             'environment' => empty($environment) ? new \stdClass() : $environment,
             'health_check' => $app->health_check,
+            'callback_url' => $callbackUrl ?? '',
         ])->throw()->json();
     }
 

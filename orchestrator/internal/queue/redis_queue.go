@@ -18,6 +18,7 @@ type BuildJob struct {
 	GitRepository string            `json:"git_repository"`
 	GitBranch     string            `json:"git_branch"`
 	CommitSHA     string            `json:"commit_sha,omitempty"`
+	GitToken      string            `json:"git_token,omitempty"`
 	Type          string            `json:"type"`
 	BuildCommand  string            `json:"build_command"`
 	StartCommand  string            `json:"start_command"`
@@ -27,6 +28,7 @@ type BuildJob struct {
 	MemoryLimit   int               `json:"memory_limit"`
 	Environment   map[string]string `json:"environment"`
 	HealthCheck   *HealthCheck      `json:"health_check"`
+	CallbackURL   string            `json:"callback_url,omitempty"`
 }
 
 type HealthCheck struct {

@@ -17,32 +17,38 @@ Route::prefix('webhooks')->group(function () {
 });
 
 // Internal API (called by orchestrator)
+// Deployment status callback - secured with orchestrator API key
+Route::post('/internal/deployments/{deployment}/status', function ($deployment, \Illuminate\Http\Request $request) {
+    $apiKey = $request->bearerToken();
+    if (! $apiKey || ! hash_equals(config('easydeploy.orchestrator_api_key') ?? '', $apiKey)) {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+
+    $deployment = \App\Models\Deployment::findOrFail($deployment);
+    $deploymentService = app(\App\Services\DeploymentService::class);
+
+    $status = $request->input('status');
+    $buildLogs = $request->input('build_logs');
+
+    // Update build logs
+    if ($buildLogs) {
+        $deployment->update(['build_logs' => $buildLogs]);
+    }
+
+    // Handle status transitions
+    if ($status === 'running') {
+        $deploymentService->markAsRunning($deployment);
+    } elseif ($status === 'failed') {
+        $reason = $request->input('error_message', 'Deployment failed');
+        $deploymentService->markAsFailed($deployment, $reason);
+    } else {
+        $deployment->update(['status' => $status]);
+    }
+
+    return response()->json(['success' => true]);
+});
+
 Route::prefix('internal')->middleware('auth:sanctum')->group(function () {
-    Route::post('/deployments/{deployment}/status', function ($deployment, \Illuminate\Http\Request $request) {
-        $deployment = \App\Models\Deployment::findOrFail($deployment);
-        $deploymentService = app(\App\Services\DeploymentService::class);
-
-        $status = $request->input('status');
-        $buildLogs = $request->input('build_logs');
-
-        // Update build logs
-        if ($buildLogs) {
-            $deployment->update(['build_logs' => $buildLogs]);
-        }
-
-        // Handle status transitions
-        if ($status === 'running') {
-            $deploymentService->markAsRunning($deployment);
-        } elseif ($status === 'failed') {
-            $reason = $request->input('error_message', 'Deployment failed');
-            $deploymentService->markAsFailed($deployment, $reason);
-        } else {
-            $deployment->update(['status' => $status]);
-        }
-
-        return response()->json(['success' => true]);
-    });
-
     Route::post('/containers/{container}/status', function ($container, \Illuminate\Http\Request $request) {
         $container = \App\Models\Container::findOrFail($container);
         $container->update([
