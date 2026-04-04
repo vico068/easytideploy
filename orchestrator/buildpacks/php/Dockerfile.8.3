@@ -1,0 +1,27 @@
+FROM php:8.3-cli-alpine
+
+RUN apk add --no-cache \
+    curl \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    libwebp-dev \
+    zip \
+    unzip \
+    git \
+    && docker-php-ext-install pdo pdo_mysql
+
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+WORKDIR /app
+
+COPY composer*.json ./
+ARG BUILD_COMMAND="composer install --no-dev --optimize-autoloader"
+RUN sh -c "$BUILD_COMMAND"
+
+COPY . .
+
+EXPOSE ${PORT:-8080}
+
+ARG START_COMMAND="php artisan serve --host=0.0.0.0 --port=8080"
+CMD sh -c "$START_COMMAND"

@@ -23,8 +23,9 @@ RUN addgroup -g 1000 -S easydeploy && \
 WORKDIR /app
 
 COPY --from=builder /orchestrator .
+COPY buildpacks /var/lib/easydeploy/buildpacks
 
-RUN mkdir -p /var/lib/easydeploy /etc/traefik/dynamic && \
+RUN mkdir -p /var/lib/easydeploy/repos /etc/traefik/dynamic && \
     chown -R easydeploy:easydeploy /var/lib/easydeploy /etc/traefik/dynamic
 
 USER easydeploy

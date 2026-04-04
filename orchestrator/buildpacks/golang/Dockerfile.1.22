@@ -1,0 +1,20 @@
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+COPY go.mod go.sum* ./
+RUN go mod download
+
+COPY . .
+
+ARG BUILD_COMMAND="go build -o app ."
+RUN sh -c "$BUILD_COMMAND"
+
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates tzdata
+WORKDIR /app
+COPY --from=builder /app/app .
+
+EXPOSE ${PORT:-8080}
+
+ARG START_COMMAND="./app"
+CMD sh -c "$START_COMMAND"
