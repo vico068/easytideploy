@@ -92,6 +92,9 @@ func main() {
 	// Initialize Traefik config generator
 	traefikGen := traefik.NewConfigGenerator(db, cfg)
 
+	// Wire traefik generator to scheduler so deploy pipeline generates configs
+	sched.SetTraefikGenerator(traefikGen)
+
 	// Start watching for config changes
 	ctx, cancel := context.WithCancel(context.Background())
 	go traefikGen.WatchChanges(ctx, 10*time.Second)

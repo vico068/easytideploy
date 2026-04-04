@@ -33,10 +33,13 @@ type CreateContainerRequest struct {
 }
 
 // CreateContainerResponse represents the response from creating a container
+// JSON tags align with the agent's field names for wire compatibility.
 type CreateContainerResponse struct {
-	ContainerId string
-	InternalIp  string
-	Port        int32
+	Success     bool   `json:"Success"`
+	ContainerId string `json:"ContainerId"`
+	InternalIp  string `json:"InternalIp"`
+	HostPort    int32  `json:"HostPort"`
+	Error       string `json:"Error"`
 }
 
 // RemoveContainerRequest represents a request to remove a container

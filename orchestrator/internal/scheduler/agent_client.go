@@ -55,8 +55,14 @@ func (c *AgentClient) Close() error {
 	return nil
 }
 
+// CreateContainerResult holds the result of a container creation
+type CreateContainerResult struct {
+	ContainerID string
+	HostPort    int32
+}
+
 // CreateContainer creates a new container on the agent
-func (c *AgentClient) CreateContainer(ctx context.Context, req *DeployRequest) (string, error) {
+func (c *AgentClient) CreateContainer(ctx context.Context, req *DeployRequest) (*CreateContainerResult, error) {
 	response, err := c.client.CreateContainer(ctx, &proto.CreateContainerRequest{
 		Image:       req.ImageName,
 		Name:        req.Name,
@@ -67,10 +73,13 @@ func (c *AgentClient) CreateContainer(ctx context.Context, req *DeployRequest) (
 		Labels:      req.Labels,
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to create container: %w", err)
+		return nil, fmt.Errorf("failed to create container: %w", err)
 	}
 
-	return response.ContainerId, nil
+	return &CreateContainerResult{
+		ContainerID: response.ContainerId,
+		HostPort:    response.HostPort,
+	}, nil
 }
 
 // StartContainer starts a container

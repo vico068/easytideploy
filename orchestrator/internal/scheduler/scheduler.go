@@ -15,6 +15,7 @@ import (
 	"github.com/easyti/easydeploy/orchestrator/internal/docker"
 	"github.com/easyti/easydeploy/orchestrator/internal/git"
 	"github.com/easyti/easydeploy/orchestrator/internal/queue"
+	"github.com/easyti/easydeploy/orchestrator/internal/traefik"
 	"github.com/easyti/easydeploy/orchestrator/pkg/buildpack"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -40,10 +41,16 @@ type Scheduler struct {
 	gitCloner    *git.Cloner
 	imageBuilder *docker.ImageBuilder
 	agentClients map[string]*AgentClient
+	traefikGen   *traefik.ConfigGenerator
 	mu           sync.RWMutex
 	healthTicker *time.Ticker
 	stopCh       chan struct{}
 	wg           sync.WaitGroup
+}
+
+// SetTraefikGenerator sets the Traefik config generator (called after initialization)
+func (s *Scheduler) SetTraefikGenerator(gen *traefik.ConfigGenerator) {
+	s.traefikGen = gen
 }
 
 // New creates a new Scheduler instance
@@ -384,7 +391,7 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 		}
 
 		// Create container
-		containerID, err := client.CreateContainer(ctx, &DeployRequest{
+		containerResult, err := client.CreateContainer(ctx, &DeployRequest{
 			ImageName: fmt.Sprintf("%s:%s", result.AgentImageName, result.ImageTag),
 			Name:      fmt.Sprintf("%s-%s-%d", job.ApplicationID, result.ImageTag[:8], i),
 			EnvVars:   job.Environment,
@@ -403,13 +410,14 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 		}
 
 		// Save container to database
-		if err := s.saveContainer(ctx, job.DeploymentID, job.ApplicationID, server.ID, containerID, i); err != nil {
+		if err := s.saveContainer(ctx, job.DeploymentID, job.ApplicationID, server.ID, containerResult.ContainerID, int(containerResult.HostPort), job.Port, i); err != nil {
 			logger.Error().Err(err).Msg("Failed to save container to database")
 		}
 
 		logger.Info().
-			Str("container_id", containerID).
+			Str("container_id", containerResult.ContainerID).
 			Str("server", server.ID).
+			Int("host_port", int(containerResult.HostPort)).
 			Int("replica", i).
 			Msg("Container created")
 	}
@@ -476,21 +484,22 @@ func (s *Scheduler) notifyPanel(callbackURL string, status DeploymentStatus, err
 	}
 }
 
-func (s *Scheduler) saveContainer(ctx context.Context, deploymentID, appID, serverID, containerID string, replica int) error {
+func (s *Scheduler) saveContainer(ctx context.Context, deploymentID, appID, serverID, containerID string, hostPort, internalPort, replica int) error {
 	query := `
-		INSERT INTO containers (id, deployment_id, application_id, server_id, docker_container_id, name, status, replica_index, created_at)
-		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, 'running', $6, NOW())
+		INSERT INTO containers (id, deployment_id, application_id, server_id, docker_container_id, name, host_port, internal_port, status, health_status, replica_index, created_at, updated_at)
+		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'running', 'healthy', $8, NOW(), NOW())
 	`
 	name := fmt.Sprintf("%s-replica-%d", appID, replica)
-	_, err := s.db.Pool().Exec(ctx, query, deploymentID, appID, serverID, containerID, name, replica)
+	_, err := s.db.Pool().Exec(ctx, query, deploymentID, appID, serverID, containerID, name, hostPort, internalPort, replica)
 	return err
 }
 
 func (s *Scheduler) updateTraefikConfig(ctx context.Context, applicationID string) error {
-	// This will be implemented by the Traefik config generator
-	// For now, just log it
-	log.Info().Str("app_id", applicationID).Msg("Traefik config update requested")
-	return nil
+	if s.traefikGen == nil {
+		log.Warn().Str("app_id", applicationID).Msg("Traefik config generator not set, skipping config update")
+		return nil
+	}
+	return s.traefikGen.GenerateConfig(ctx, applicationID)
 }
 
 func (s *Scheduler) runHealthChecks() {
@@ -558,12 +567,20 @@ func (s *Scheduler) checkContainerHealth(containerID, dockerContainerID, serverI
 	if !healthy {
 		log.Warn().Str("container", containerID).Msg("Container unhealthy")
 		s.markContainerUnhealthy(containerID)
+	} else {
+		s.markContainerHealthy(containerID)
 	}
 }
 
 func (s *Scheduler) markContainerUnhealthy(containerID string) {
 	ctx := context.Background()
 	query := `UPDATE containers SET health_status = 'unhealthy', updated_at = NOW() WHERE id = $1`
+	s.db.Pool().Exec(ctx, query, containerID)
+}
+
+func (s *Scheduler) markContainerHealthy(containerID string) {
+	ctx := context.Background()
+	query := `UPDATE containers SET health_status = 'healthy', health_checked_at = NOW(), updated_at = NOW() WHERE id = $1 AND health_status != 'healthy'`
 	s.db.Pool().Exec(ctx, query, containerID)
 }
 
