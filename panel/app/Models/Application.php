@@ -94,14 +94,14 @@ class Application extends Model
     public function latestDeployment(): HasOne
     {
         return $this->hasOne(Deployment::class)
-            ->whereRaw('created_at = (SELECT MAX(created_at) FROM deployments WHERE application_id = applications.id)');
+            ->whereRaw('created_at = (SELECT MAX(d2.created_at) FROM deployments d2 WHERE d2.application_id = deployments.application_id)');
     }
 
     public function runningDeployment(): HasOne
     {
         return $this->hasOne(Deployment::class)
             ->where('status', 'running')
-            ->whereRaw('created_at = (SELECT MAX(created_at) FROM deployments WHERE application_id = applications.id AND status = ?)', ['running']);
+            ->whereRaw('created_at = (SELECT MAX(d2.created_at) FROM deployments d2 WHERE d2.application_id = deployments.application_id AND d2.status = ?)', ['running']);
     }
 
     public function containers(): HasMany
