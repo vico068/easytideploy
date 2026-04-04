@@ -20,8 +20,8 @@ class MonitoringStatsWidget extends BaseWidget
     {
         $onlineServers = Server::where('status', 'online')->count();
         $totalServers = Server::count();
-        $avgCpu = Server::where('status', 'online')->avg('cpu_usage') ?? 0;
-        $avgMemory = Server::where('status', 'online')->avg('memory_usage') ?? 0;
+        $avgCpu = Server::where('status', 'online')->avg('cpu_used') ?? 0;
+        $avgMemory = Server::where('status', 'online')->avg('memory_used') ?? 0;
         $runningContainers = Container::where('status', 'running')->count();
         $unhealthyContainers = Container::where('health_status', 'unhealthy')->count();
         $failedToday = Deployment::whereDate('created_at', today())->where('status', 'failed')->count();
