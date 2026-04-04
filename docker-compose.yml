@@ -103,7 +103,7 @@ services:
       LISTEN_ADDR: ":8080"
       API_KEY: ${API_KEY:-easydeploy_api_key_dev}
       DATABASE_URL: postgres://easydeploy:${DB_PASSWORD:-easydeploy_dev}@postgres:5432/easydeploy?sslmode=disable
-      REDIS_URL: redis://redis:6379
+      REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379
       TRAEFIK_API_URL: http://traefik:8080
       TRAEFIK_CONFIG_DIR: /etc/traefik/dynamic
       DOCKER_REGISTRY: ${DOCKER_REGISTRY:-registry:5000}
