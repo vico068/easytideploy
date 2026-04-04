@@ -45,9 +45,11 @@ services:
       - easydeploy
 
   traefik:
-    image: traefik:v3.0
+    image: traefik:v3.3
     container_name: easydeploy-traefik
     restart: unless-stopped
+    environment:
+      DOCKER_API_VERSION: "1.41"
     command:
       - "--api.insecure=true"
       - "--api.dashboard=true"

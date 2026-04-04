@@ -50,14 +50,16 @@ services:
           cpus: "0.5"
 
   traefik:
-    image: traefik:v3.0
+    image: traefik:v3.3
     container_name: easydeploy-traefik
     restart: always
+    environment:
+      DOCKER_API_VERSION: "1.41"
     command:
       - "--api.dashboard=true"
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      - "--providers.docker.network=easydeploy"
+      - "--providers.docker.network=easydeploy_easydeploy"
       - "--providers.file.directory=/etc/traefik/dynamic"
       - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
