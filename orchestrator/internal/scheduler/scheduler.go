@@ -14,6 +14,7 @@ import (
 	"github.com/easyti/easydeploy/orchestrator/internal/git"
 	"github.com/easyti/easydeploy/orchestrator/internal/queue"
 	"github.com/easyti/easydeploy/orchestrator/pkg/buildpack"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -180,7 +181,7 @@ type BuildResult struct {
 	Port       int
 }
 
-func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJob, logger *log.Logger) (*BuildResult, error) {
+func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJob, logger *zerolog.Logger) (*BuildResult, error) {
 	result := &BuildResult{}
 
 	// Step 1: Clone repository
@@ -343,7 +344,7 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 	return result, nil
 }
 
-func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, result *BuildResult, logger *log.Logger) error {
+func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, result *BuildResult, logger *zerolog.Logger) error {
 	// Update deployment status
 	if err := s.updateDeploymentStatus(ctx, job.DeploymentID, StatusDeploying, ""); err != nil {
 		return err
@@ -371,7 +372,7 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 		}
 
 		// Create container
-		containerID, err := client.CreateContainer(ctx, &CreateContainerRequest{
+		containerID, err := client.CreateContainer(ctx, &DeployRequest{
 			ImageName: fmt.Sprintf("%s:%s", result.ImageName, result.ImageTag),
 			Name:      fmt.Sprintf("%s-%s-%d", job.ApplicationID, result.ImageTag[:8], i),
 			EnvVars:   job.Environment,

@@ -10,8 +10,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// CreateContainerRequest represents a request to create a container
-type CreateContainerRequest struct {
+// DeployRequest represents a request to create a container via agent
+type DeployRequest struct {
 	ImageName string
 	Name      string
 	EnvVars   map[string]string
@@ -56,28 +56,24 @@ func (c *AgentClient) Close() error {
 }
 
 // CreateContainer creates a new container on the agent
-func (c *AgentClient) CreateContainer(ctx context.Context, req *CreateContainerRequest) (string, error) {
-	// Convert port to port mapping
-	portMappings := make(map[string]int32)
-	if req.Port > 0 {
-		portMappings[fmt.Sprintf("%d/tcp", req.Port)] = 0 // 0 = auto-assign host port
+func (c *AgentClient) CreateContainer(ctx context.Context, req *DeployRequest) (string, error) {
+	// Convert labels map to slice
+	var labels []string
+	for k, v := range req.Labels {
+		labels = append(labels, fmt.Sprintf("%s=%s", k, v))
 	}
 
 	response, err := c.client.CreateContainer(ctx, &proto.CreateContainerRequest{
-		ImageName:    req.ImageName,
-		Name:         req.Name,
-		EnvVars:      req.EnvVars,
-		PortMappings: portMappings,
-		CpuLimit:     req.CPULimit,
-		MemLimit:     req.MemLimit,
-		Labels:       req.Labels,
+		Image:       req.ImageName,
+		Name:        req.Name,
+		Port:        int32(req.Port),
+		Environment: req.EnvVars,
+		CpuLimit:    req.CPULimit,
+		MemoryLimit: req.MemLimit,
+		Labels:      labels,
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create container: %w", err)
-	}
-
-	if !response.Success {
-		return "", fmt.Errorf("container creation failed: %s", response.Error)
 	}
 
 	return response.ContainerId, nil
@@ -85,15 +81,11 @@ func (c *AgentClient) CreateContainer(ctx context.Context, req *CreateContainerR
 
 // StartContainer starts a container
 func (c *AgentClient) StartContainer(ctx context.Context, containerID string) error {
-	response, err := c.client.StartContainer(ctx, &proto.ContainerRequest{
+	_, err := c.client.StartContainer(ctx, &proto.StartContainerRequest{
 		ContainerId: containerID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
-	}
-
-	if !response.Success {
-		return fmt.Errorf("container start failed: %s", response.Error)
 	}
 
 	return nil
@@ -101,15 +93,11 @@ func (c *AgentClient) StartContainer(ctx context.Context, containerID string) er
 
 // StopContainer stops a container
 func (c *AgentClient) StopContainer(ctx context.Context, containerID string) error {
-	response, err := c.client.StopContainer(ctx, &proto.ContainerRequest{
+	_, err := c.client.StopContainer(ctx, &proto.StopContainerRequest{
 		ContainerId: containerID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to stop container: %w", err)
-	}
-
-	if !response.Success {
-		return fmt.Errorf("container stop failed: %s", response.Error)
 	}
 
 	return nil
@@ -117,15 +105,11 @@ func (c *AgentClient) StopContainer(ctx context.Context, containerID string) err
 
 // RestartContainer restarts a container
 func (c *AgentClient) RestartContainer(ctx context.Context, containerID string) error {
-	response, err := c.client.RestartContainer(ctx, &proto.ContainerRequest{
+	_, err := c.client.RestartContainer(ctx, &proto.RestartContainerRequest{
 		ContainerId: containerID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to restart container: %w", err)
-	}
-
-	if !response.Success {
-		return fmt.Errorf("container restart failed: %s", response.Error)
 	}
 
 	return nil
@@ -133,104 +117,72 @@ func (c *AgentClient) RestartContainer(ctx context.Context, containerID string) 
 
 // RemoveContainer removes a container
 func (c *AgentClient) RemoveContainer(ctx context.Context, containerID string) error {
-	response, err := c.client.RemoveContainer(ctx, &proto.ContainerRequest{
+	_, err := c.client.RemoveContainer(ctx, &proto.RemoveContainerRequest{
 		ContainerId: containerID,
+		Force:       true,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to remove container: %w", err)
 	}
 
-	if !response.Success {
-		return fmt.Errorf("container removal failed: %s", response.Error)
-	}
-
 	return nil
 }
 
-// GetLogs retrieves container logs
+// GetLogs retrieves container logs via streaming
 func (c *AgentClient) GetLogs(ctx context.Context, containerID string, lines int) (string, error) {
-	response, err := c.client.GetContainerLogs(ctx, &proto.GetLogsRequest{
+	stream, err := c.client.GetContainerLogs(ctx, &proto.GetLogsRequest{
 		ContainerId: containerID,
-		Tail:        int32(lines),
-		Timestamps:  true,
+		Lines:       int32(lines),
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to get logs: %w", err)
 	}
 
-	return response.Logs, nil
-}
-
-// GetContainerStats retrieves container statistics
-func (c *AgentClient) GetContainerStats(ctx context.Context, containerID string) (*proto.ContainerStats, error) {
-	response, err := c.client.GetContainerStats(ctx, &proto.ContainerRequest{
-		ContainerId: containerID,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get stats: %w", err)
+	var logs string
+	for {
+		line, err := stream.Recv()
+		if err != nil {
+			break
+		}
+		logs += line.Content + "\n"
 	}
 
-	return response, nil
+	return logs, nil
 }
 
 // HealthCheck checks if a container is healthy
 func (c *AgentClient) HealthCheck(ctx context.Context, containerID string) (bool, error) {
-	response, err := c.client.HealthCheck(ctx, &proto.HealthCheckRequest{
+	response, err := c.client.CheckHealth(ctx, &proto.HealthCheckRequest{
 		ContainerId: containerID,
 	})
 	if err != nil {
 		return false, fmt.Errorf("health check failed: %w", err)
 	}
 
-	return response.Healthy, nil
-}
-
-// ListContainers lists all containers on the agent
-func (c *AgentClient) ListContainers(ctx context.Context, onlyRunning bool) ([]*proto.ContainerInfo, error) {
-	response, err := c.client.ListContainers(ctx, &proto.ListContainersRequest{
-		All: !onlyRunning,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list containers: %w", err)
-	}
-
-	return response.Containers, nil
+	return response.IsHealthy, nil
 }
 
 // PullImage pulls an image on the agent
 func (c *AgentClient) PullImage(ctx context.Context, imageName string) error {
 	response, err := c.client.PullImage(ctx, &proto.PullImageRequest{
-		ImageName: imageName,
+		Image: imageName,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to pull image: %w", err)
 	}
 
 	if !response.Success {
-		return fmt.Errorf("image pull failed: %s", response.Error)
+		return fmt.Errorf("image pull failed")
 	}
 
 	return nil
 }
 
-// ExecCommand executes a command in a container
-func (c *AgentClient) ExecCommand(ctx context.Context, containerID string, command []string) (string, int32, error) {
-	response, err := c.client.ExecCommand(ctx, &proto.ExecRequest{
-		ContainerId: containerID,
-		Command:     command,
-	})
+// GetServerStats retrieves server-level stats from the agent
+func (c *AgentClient) GetServerStats(ctx context.Context) (*proto.ServerStatsResponse, error) {
+	response, err := c.client.GetServerStats(ctx, &proto.ServerStatsRequest{})
 	if err != nil {
-		return "", -1, fmt.Errorf("failed to exec command: %w", err)
-	}
-
-	return response.Output, response.ExitCode, nil
-}
-
-// GetServerMetrics retrieves server-level metrics from the agent
-func (c *AgentClient) GetServerMetrics(ctx context.Context) (*proto.ServerMetrics, error) {
-	response, err := c.client.GetServerMetrics(ctx, &proto.Empty{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to get server metrics: %w", err)
+		return nil, fmt.Errorf("failed to get server stats: %w", err)
 	}
 
 	return response, nil
