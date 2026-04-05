@@ -80,7 +80,7 @@ class DeploymentResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->weight('medium')
-                    ->url(fn ($record) => ApplicationResource::getUrl('edit', ['record' => $record->application]))
+                    ->url(fn ($record) => $record->application ? ApplicationResource::getUrl('edit', ['record' => $record->application]) : null)
                     ->icon('heroicon-m-cube'),
 
                 Tables\Columns\TextColumn::make('short_commit_sha')
