@@ -16,10 +16,11 @@ import (
 
 // DatabaseContainer represents a container from the database
 type DatabaseContainer struct {
-	ID            string
-	ApplicationID string
-	ServerID      string
-	Status        string
+	ID                string
+	ApplicationID     string
+	ServerID          string
+	DockerContainerID string
+	Status            string
 }
 
 // DatabaseServer represents a server from the database
@@ -94,7 +95,7 @@ func (s *Scheduler) collectServerAndContainerMetrics() {
 
 		// 6. Collect stats for each container
 		for _, container := range containers {
-			containerStats, err := client.GetContainerStats(ctx, container.ID)
+			containerStats, err := client.GetContainerStats(ctx, container.DockerContainerID)
 			if err != nil {
 				log.Error().Str("container_id", container.ID).Err(err).Msg("failed to get container stats")
 				continue
@@ -157,7 +158,7 @@ func (s *Scheduler) getOnlineServers() ([]DatabaseServer, error) {
 // getRunningContainersByServer retrieves all running containers for a server
 func (s *Scheduler) getRunningContainersByServer(serverID string) ([]DatabaseContainer, error) {
 	query := `
-		SELECT id, application_id, server_id, status
+		SELECT id, application_id, server_id, docker_container_id, status
 		FROM containers
 		WHERE server_id = $1 AND status = 'running'
 		ORDER BY id
@@ -172,7 +173,7 @@ func (s *Scheduler) getRunningContainersByServer(serverID string) ([]DatabaseCon
 	var containers []DatabaseContainer
 	for rows.Next() {
 		var container DatabaseContainer
-		if err := rows.Scan(&container.ID, &container.ApplicationID, &container.ServerID, &container.Status); err != nil {
+		if err := rows.Scan(&container.ID, &container.ApplicationID, &container.ServerID, &container.DockerContainerID, &container.Status); err != nil {
 			return nil, err
 		}
 		containers = append(containers, container)

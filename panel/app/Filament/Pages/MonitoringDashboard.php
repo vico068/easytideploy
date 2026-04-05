@@ -3,12 +3,13 @@
 namespace App\Filament\Pages;
 
 use App\Models\Application;
-use App\Models\ApplicationLog;
 use App\Models\Container;
 use App\Models\HttpMetric;
 use App\Models\ResourceUsage;
+use App\Services\OrchestratorClient;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class MonitoringDashboard extends Page
 {
@@ -106,8 +107,21 @@ class MonitoringDashboard extends Page
         if ($selectedApp) {
             $containers = Container::where('application_id', $selectedApp->id)->get();
             $runningContainers = $containers->where('status', 'running')->count();
-            $avgCpu = round($containers->where('status', 'running')->avg('cpu_usage') ?? 0, 1);
-            $avgMemory = round($containers->where('status', 'running')->avg('memory_usage') ?? 0, 1);
+
+            // CPU/RAM from resource_usages (last 5 minutes average)
+            $containerIds = $containers->where('status', 'running')->pluck('id')->toArray();
+            $recentStats = null;
+            if (! empty($containerIds)) {
+                $recentStats = ResourceUsage::whereIn('container_id', $containerIds)
+                    ->where('recorded_at', '>=', now()->subMinutes(5))
+                    ->select([
+                        DB::raw('AVG(cpu_percent) as avg_cpu'),
+                        DB::raw('AVG(memory_percent) as avg_memory'),
+                    ])
+                    ->first();
+            }
+            $avgCpu = round((float) ($recentStats?->avg_cpu ?? 0), 1);
+            $avgMemory = round((float) ($recentStats?->avg_memory ?? 0), 1);
 
             // HTTP metrics para a app
             $totalRequests = HttpMetric::where('application_id', $selectedApp->id)
@@ -221,15 +235,73 @@ class MonitoringDashboard extends Page
 
     protected function getContainerLogs($appId): \Illuminate\Support\Collection
     {
-        $query = ApplicationLog::where('application_id', $appId)
-            ->latest('timestamp')
-            ->limit(100);
+        try {
+            $app = Application::find($appId);
+            if (! $app) {
+                return collect();
+            }
 
-        if ($this->selectedContainerId) {
-            $query->where('container_id', $this->selectedContainerId);
+            $orchestrator = app(OrchestratorClient::class);
+            $response = $orchestrator->getLogs($app, 100, $this->selectedContainerId);
+
+            $logs = collect();
+            $logsMap = $response['logs'] ?? [];
+
+            foreach ($logsMap as $containerName => $logText) {
+                if (! is_string($logText) || $logText === '') {
+                    continue;
+                }
+
+                $lines = explode("\n", rtrim($logText, "\n"));
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if ($line === '') {
+                        continue;
+                    }
+
+                    // Try to parse common log formats for level/timestamp
+                    $level = 'info';
+                    $timestamp = null;
+                    $message = $line;
+
+                    // Match Docker timestamp prefix: 2026-04-05T10:25:03.123456789Z
+                    if (preg_match('/^(\d{4}-\d{2}-\d{2}T[\d:.]+Z?)\s+(.*)$/u', $line, $m)) {
+                        try {
+                            $timestamp = \Carbon\Carbon::parse($m[1]);
+                        } catch (\Throwable) {
+                            // ignore
+                        }
+                        $message = $m[2];
+                    }
+
+                    // Detect level from message content
+                    $lower = strtolower($message);
+                    if (str_contains($lower, 'error') || str_contains($lower, 'fatal') || str_contains($lower, 'panic')) {
+                        $level = 'error';
+                    } elseif (str_contains($lower, 'warn')) {
+                        $level = 'warning';
+                    } elseif (str_contains($lower, 'debug') || str_contains($lower, 'trace')) {
+                        $level = 'debug';
+                    }
+
+                    $logs->push((object) [
+                        'container_name' => $containerName,
+                        'level' => $level,
+                        'timestamp' => $timestamp,
+                        'message' => $message,
+                    ]);
+                }
+            }
+
+            return $logs->take(-100)->values();
+        } catch (\Throwable $e) {
+            Log::warning('Failed to fetch container logs from orchestrator', [
+                'app_id' => $appId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return collect();
         }
-
-        return $query->get()->reverse()->values();
     }
 
     public function refreshLogs(): void

@@ -321,7 +321,7 @@
         >
             @forelse($logs as $log)
                 @php
-                    $levelColor = match($log->level?->value ?? $log->level) {
+                    $levelColor = match($log->level) {
                         'error', 'critical' => 'text-red-400',
                         'warning'           => 'text-amber-400',
                         'info'              => 'text-sky-400',
@@ -333,8 +333,13 @@
                     <span class="text-slate-600 shrink-0 tabular-nums">
                         {{ $log->timestamp?->format('H:i:s') ?? '—' }}
                     </span>
+                    @if(isset($log->container_name))
+                        <span class="text-purple-400/60 shrink-0 text-[10px] font-medium mt-px truncate max-w-[80px]" title="{{ $log->container_name }}">
+                            {{ $log->container_name }}
+                        </span>
+                    @endif
                     <span class="{{ $levelColor }} shrink-0 w-12 uppercase text-[10px] font-bold mt-px">
-                        {{ $log->level?->value ?? $log->level }}
+                        {{ $log->level }}
                     </span>
                     <span class="text-slate-300 break-all">{{ $log->message }}</span>
                 </div>
