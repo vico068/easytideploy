@@ -224,8 +224,17 @@ func (s *Scheduler) saveContainerMetrics(container DatabaseContainer, stats inte
 	// Type assert to ContainerStatsResponse
 	st, ok := stats.(*proto.ContainerStatsResponse)
 	if !ok {
+		log.Warn().Str("container_id", container.ID).Msg("container stats wrong type, skipping")
 		return nil // Skip if wrong type
 	}
+
+	memoryMB := float64(st.MemoryUsage) / (1024 * 1024)
+	log.Debug().
+		Str("container_id", container.ID).
+		Float64("cpu", st.CpuPercent).
+		Float64("mem_pct", st.MemoryPercent).
+		Float64("mem_mb", memoryMB).
+		Msg("saving container metrics")
 
 	query := `
 		INSERT INTO resource_usages (
@@ -246,7 +255,7 @@ func (s *Scheduler) saveContainerMetrics(container DatabaseContainer, stats inte
 		container.ServerID,
 		st.CpuPercent,
 		st.MemoryPercent,
-		float64(st.MemoryUsage)/(1024*1024), // bytes to MB
+		memoryMB,
 		st.NetworkRxBytes,
 		st.NetworkTxBytes,
 		st.BlockRead,
