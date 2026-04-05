@@ -10,7 +10,7 @@
         <div x-data="{ open: false }" class="relative">
             <button
                 @click="open = !open"
-                class="flex items-center gap-3 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700
+                class="flex items-center gap-3 bg-white dark:bg-slate-900/60 border border-gray-200 dark:border-white/[0.07]
                        rounded-xl px-4 py-2.5 min-w-[260px] shadow-sm
                        hover:border-sky-300 dark:hover:border-sky-500/50 transition-all duration-200 text-left"
             >
@@ -46,8 +46,8 @@
                 x-transition:leave="transition ease-in duration-150"
                 x-transition:leave-start="opacity-100 translate-y-0"
                 x-transition:leave-end="opacity-0 -translate-y-2"
-                class="absolute top-full mt-2 left-0 min-w-[260px] z-50 bg-white dark:bg-slate-800
-                       border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl
+                class="absolute top-full mt-2 left-0 min-w-[260px] z-50 bg-white dark:bg-slate-900/60
+                       border border-gray-200 dark:border-white/[0.07] rounded-xl shadow-xl
                        shadow-black/10 overflow-hidden"
                 x-cloak
             >
@@ -80,7 +80,7 @@
         </div>
 
         {{-- Period selector --}}
-        <div class="flex items-center gap-1 bg-gray-100 dark:bg-slate-800/80 rounded-xl p-1 self-start md:self-auto">
+        <div class="flex items-center gap-1 bg-gray-100 dark:bg-slate-900/60/80 rounded-xl p-1 self-start md:self-auto">
             @foreach(['1h' => '1h', '6h' => '6h', '24h' => '24h', '7d' => '7d'] as $key => $label)
                 <button
                     wire:click="setPeriod('{{ $key }}')"
@@ -97,7 +97,7 @@
 
     @if(! $selectedApp)
         {{-- Estado vazio --}}
-        <div class="rounded-2xl border-2 border-dashed border-gray-200 dark:border-slate-700 p-16 text-center">
+        <div class="rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/[0.07] p-16 text-center">
             <x-heroicon-o-chart-bar class="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-slate-600" />
             <h3 class="text-base font-semibold text-gray-500 dark:text-slate-400 mb-2">Nenhuma aplicação selecionada</h3>
             <p class="text-sm text-gray-400 dark:text-slate-500">Selecione uma aplicação acima para ver as métricas</p>
@@ -110,7 +110,7 @@
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
 
         {{-- Containers --}}
-        <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800/50 p-5
+        <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/60/50 p-5
                     border border-gray-100 dark:border-white/5
                     hover:border-sky-200 dark:hover:border-sky-500/30
                     hover:shadow-lg hover:shadow-sky-500/10 transition-all duration-300">
@@ -129,7 +129,7 @@
         </div>
 
         {{-- CPU --}}
-        <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800/50 p-5
+        <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/60/50 p-5
                     border border-gray-100 dark:border-white/5
                     hover:border-cyan-200 dark:hover:border-cyan-500/30
                     hover:shadow-lg hover:shadow-cyan-500/10 transition-all duration-300">
@@ -150,7 +150,7 @@
         </div>
 
         {{-- RAM --}}
-        <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800/50 p-5
+        <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/60/50 p-5
                     border border-gray-100 dark:border-white/5
                     hover:border-violet-200 dark:hover:border-violet-500/30
                     hover:shadow-lg hover:shadow-violet-500/10 transition-all duration-300">
@@ -171,7 +171,7 @@
         </div>
 
         {{-- HTTP Requests --}}
-        <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-800/50 p-5
+        <div class="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/60/50 p-5
                     border border-gray-100 dark:border-white/5
                     hover:border-emerald-200 dark:hover:border-emerald-500/30
                     hover:shadow-lg hover:shadow-emerald-500/10 transition-all duration-300">
@@ -207,7 +207,7 @@
     <div class="grid grid-cols-1 gap-5">
 
         {{-- HTTP Requests Chart --}}
-        <div class="bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-100 dark:border-white/5 p-5 shadow-sm">
+        <div class="bg-white dark:bg-slate-900/60/50 rounded-2xl border border-gray-100 dark:border-white/5 p-5 shadow-sm">
             <div class="flex items-center justify-between mb-5">
                 <div>
                     <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Requisições HTTP</h3>
@@ -224,7 +224,7 @@
             @if(count($httpChartData['labels']) > 0)
                 <div class="h-56" id="httpChartContainer" wire:ignore><canvas></canvas></div>
             @else
-                <div class="h-56 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700">
+                <div class="h-56 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-white/[0.07]">
                     <x-heroicon-o-globe-alt class="w-10 h-10 mb-2 opacity-30" />
                     <p class="text-sm">Sem dados no período</p>
                 </div>
@@ -232,7 +232,7 @@
         </div>
 
         {{-- Resources Chart --}}
-        <div class="bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-100 dark:border-white/5 p-5 shadow-sm">
+        <div class="bg-white dark:bg-slate-900/60/50 rounded-2xl border border-gray-100 dark:border-white/5 p-5 shadow-sm">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
                 <div>
                     <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Uso de Recursos</h3>
@@ -261,7 +261,7 @@
             @if(isset($resourceChartData['labels']) && count($resourceChartData['labels']) > 0)
                 <div class="h-56" id="resourceChartContainer" wire:ignore><canvas></canvas></div>
             @else
-                <div class="h-56 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700">
+                <div class="h-56 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-white/[0.07]">
                     <x-heroicon-o-chart-bar class="w-10 h-10 mb-2 opacity-30" />
                     <p class="text-sm">Sem dados no período</p>
                 </div>
@@ -269,7 +269,7 @@
         </div>
 
         {{-- Network Chart --}}
-        <div class="bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-100 dark:border-white/5 p-5 shadow-sm">
+        <div class="bg-white dark:bg-slate-900/60/50 rounded-2xl border border-gray-100 dark:border-white/5 p-5 shadow-sm">
             <div class="flex items-center justify-between mb-5">
                 <div>
                     <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Tráfego de Rede</h3>
@@ -284,7 +284,7 @@
             @if(isset($networkChartData['labels']) && count($networkChartData['labels']) > 0)
                 <div class="h-56" id="networkChartContainer" wire:ignore><canvas></canvas></div>
             @else
-                <div class="h-56 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700">
+                <div class="h-56 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-white/[0.07]">
                     <x-heroicon-o-signal class="w-10 h-10 mb-2 opacity-30" />
                     <p class="text-sm">Sem dados de rede no período</p>
                 </div>

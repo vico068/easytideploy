@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Auth\Login;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -10,6 +11,7 @@ use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Support\Enums\ThemeMode;
 use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -28,12 +30,15 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->login()
+            ->login(Login::class)
             ->brandLogo(asset('images/logo-vertical-easyti-cloud.png'))
             ->brandLogoHeight('2.5rem')
             ->font('Manrope')
+            ->viteTheme('resources/css/filament/admin/theme.css')
+            ->defaultThemeMode(ThemeMode::Dark)
+            ->sidebarWidth('280px')
             ->colors([
-                'primary' => Color::Sky,  // Azul similar ao Brand EasyTI
+                'primary' => Color::Sky,
                 'success' => Color::Emerald,
                 'warning' => Color::Amber,
                 'danger' => Color::Red,
@@ -43,6 +48,14 @@ class AdminPanelProvider extends PanelProvider
                 'panels::head.end',
                 fn (): HtmlString => new HtmlString(
                     '<link rel="stylesheet" href="' . Vite::asset('resources/css/filament-addon.css') . '">'
+                )
+            )
+            ->renderHook(
+                'panels::sidebar.footer',
+                fn (): HtmlString => new HtmlString(
+                    '<div class="px-4 py-3" style="border-top: 1px solid rgba(255,255,255,0.06);">
+                        <p class="text-xs" style="color: #475569;">EasyDeploy &middot; EasyTI Cloud</p>
+                    </div>'
                 )
             )
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')

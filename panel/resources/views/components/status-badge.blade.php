@@ -37,10 +37,17 @@
         'warning' => 'bg-amber-50 text-amber-700 ring-amber-600/20 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-500/20',
         'danger' => 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20',
         'info' => 'bg-sky-50 text-sky-700 ring-sky-600/20 dark:bg-sky-500/10 dark:text-sky-400 dark:ring-sky-500/20',
-        'gray' => 'bg-gray-100 text-gray-700 ring-gray-600/20 dark:bg-gray-700 dark:text-gray-400 dark:ring-gray-500/20',
+        'gray' => 'bg-slate-100 text-slate-600 ring-slate-400/20 dark:bg-slate-700/50 dark:text-slate-400 dark:ring-slate-500/20',
         'brand' => 'bg-brand-50 text-brand-700 ring-brand-600/20 dark:bg-brand-500/10 dark:text-brand-400 dark:ring-brand-500/20',
         'cyan' => 'bg-cyan-50 text-cyan-700 ring-cyan-600/20 dark:bg-cyan-500/10 dark:text-cyan-400 dark:ring-cyan-500/20',
-        default => 'bg-gray-100 text-gray-700 ring-gray-600/20 dark:bg-gray-700 dark:text-gray-400 dark:ring-gray-500/20',
+        default => 'bg-slate-100 text-slate-600 ring-slate-400/20 dark:bg-slate-700/50 dark:text-slate-400 dark:ring-slate-500/20',
+    };
+
+    // Dot animation para estados ativos/transitivos
+    $dotAnimate = match($displayColor) {
+        'warning' => 'animate-pulse',
+        'success' => '',
+        default   => '',
     };
 
     // Tamanhos
@@ -66,8 +73,8 @@
     aria-label="{{ $displayLabel }} status"
 >
     @if($dot)
-        {{-- Dot indicator --}}
-        <svg class="{{ $iconSize }}" viewBox="0 0 6 6" aria-hidden="true">
+        {{-- Dot indicator com animação para estados transitivos --}}
+        <svg class="{{ $iconSize }} {{ $dotAnimate }}" viewBox="0 0 6 6" aria-hidden="true">
             <circle cx="3" cy="3" r="3" fill="currentColor" />
         </svg>
     @elseif($displayIcon)

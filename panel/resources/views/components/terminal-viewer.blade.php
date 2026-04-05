@@ -21,7 +21,7 @@
 
 <div
     {{ $attributes->merge([
-        'class' => 'bg-gray-900 rounded-lg p-4 font-mono text-sm overflow-auto shadow-lg border border-gray-800'
+        'class' => 'terminal-container bg-slate-950 rounded-xl p-4 font-mono text-sm overflow-auto border border-white/[0.07] scrollbar-thin'
     ]) }}
     style="max-height: {{ $maxHeight }};"
     role="log"
@@ -36,10 +36,10 @@
     @forelse($logs as $log)
         {{-- Se é um objeto de log estruturado (com propriedades) --}}
         @if(is_object($log) && isset($log->message))
-            <div class="flex py-0.5 hover:bg-gray-800 rounded px-2 group items-start transition-colors duration-150">
+            <div class="flex py-0.5 hover:bg-slate-800/60 rounded px-2 group items-start transition-colors duration-150">
                 {{-- Timestamp --}}
                 @if(isset($log->timestamp))
-                    <span class="text-gray-500 w-44 flex-shrink-0 select-none">
+                    <span class="text-slate-500 w-44 flex-shrink-0 select-none">
                         {{ $log->timestamp->format('Y-m-d H:i:s.v') }}
                     </span>
                 @endif
@@ -66,7 +66,7 @@
                 @endif
 
                 {{-- Mensagem com highlight de busca --}}
-                <span class="text-gray-200 flex-1 break-all">
+                <span class="text-slate-200 flex-1 break-all">
                     @if($searchQuery && $searchQuery !== '')
                         {!! str_replace(
                             e($searchQuery),
@@ -87,7 +87,7 @@
                 'text-yellow-400' => str_contains($log, '[WARN]') || str_contains($log, 'WARN'),
                 'text-cyan-400' => str_contains($log, '[INFO]') || str_contains($log, 'INFO'),
                 'text-green-400' => str_contains($log, '[SUCCESS]') || str_contains($log, 'SUCCESS'),
-                'text-gray-200' => !str_contains($log, '[ERROR]') && !str_contains($log, '[WARN]') && !str_contains($log, '[INFO]') && !str_contains($log, '[SUCCESS]'),
+                'text-slate-200' => !str_contains($log, '[ERROR]') && !str_contains($log, '[WARN]') && !str_contains($log, '[INFO]') && !str_contains($log, '[SUCCESS]'),
             ])>
                 @if($searchQuery && $searchQuery !== '')
                     {!! str_replace(
@@ -102,7 +102,7 @@
         @endif
     @empty
         {{-- Estado vazio --}}
-        <div class="text-center text-gray-500 py-12">
+        <div class="text-center text-slate-600 py-12">
             @svg($emptyIcon, 'w-12 h-12 mx-auto mb-2 opacity-50')
             <p class="font-sans">{{ $emptyMessage }}</p>
             @if($slot->isEmpty() === false)

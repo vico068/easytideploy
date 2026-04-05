@@ -1,0 +1,87 @@
+@import '/vendor/filament/filament/resources/css/theme.css';
+
+@config '../../../../tailwind.config.js';
+
+/* =============================================
+   EasyDeploy Dark Premium Theme
+   Override de variáveis CSS do Filament 3
+   ============================================= */
+
+:root {
+    /* Largura da sidebar */
+    --fi-sidebar-width: 280px;
+    --fi-sidebar-collapsed-width: 64px;
+}
+
+/* =============================================
+   DARK MODE — background da página
+   ============================================= */
+.dark .fi-layout,
+.dark .fi-simple-layout {
+    background-color: #080c14;
+}
+
+.dark .fi-sidebar {
+    background: linear-gradient(180deg, #0d1424 0%, #0a1120 100%);
+    border-right-color: rgba(255, 255, 255, 0.06);
+}
+
+.dark .fi-topbar {
+    background-color: rgba(8, 12, 20, 0.85);
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.dark .fi-main {
+    background-color: #080c14;
+}
+
+/* =============================================
+   SIDEBAR — nav items
+   ============================================= */
+.dark .fi-sidebar-item-active > .fi-sidebar-item-button {
+    background: linear-gradient(90deg, rgba(13, 139, 250, 0.18) 0%, rgba(13, 139, 250, 0.04) 100%);
+    border-left: 2px solid #0d8bfa;
+    padding-left: calc(theme('spacing.3') - 2px);
+    color: #60b8ff;
+}
+
+.dark .fi-sidebar-item-button:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+/* =============================================
+   TABLES — row hover sutil
+   ============================================= */
+.dark .fi-ta-row:hover .fi-ta-cell {
+    background-color: rgba(13, 139, 250, 0.03);
+}
+
+/* =============================================
+   INPUTS / SELECTS
+   ============================================= */
+.dark .fi-input {
+    background-color: #1e293b;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.dark .fi-input:focus {
+    border-color: #0d8bfa;
+}
+
+/* =============================================
+   MODAL / PANEL OVERLAY
+   ============================================= */
+.dark .fi-modal-window {
+    background-color: #111827;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 1.5rem;
+}
+
+/* =============================================
+   BADGES / STATUS
+   ============================================= */
+.dark .fi-badge {
+    backdrop-filter: blur(4px);
+}
