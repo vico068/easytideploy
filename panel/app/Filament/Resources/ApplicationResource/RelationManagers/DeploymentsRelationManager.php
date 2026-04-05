@@ -13,10 +13,14 @@ class DeploymentsRelationManager extends RelationManager
 
     protected static ?string $title = 'Deployments';
 
+    // Auto-refresh durante deployments ativos
+    protected static ?string $pollingInterval = '3s';
+
     public function table(Table $table): Table
     {
         return $table
             ->recordTitleAttribute('id')
+            ->poll('3s')
             ->columns([
                 Tables\Columns\TextColumn::make('short_commit_sha')
                     ->label('Commit')
