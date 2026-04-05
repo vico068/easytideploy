@@ -265,6 +265,7 @@ func (h *ApplicationHandler) Deploy(w http.ResponseWriter, r *http.Request) {
 		ApplicationID: id,
 		GitRepository: app.GitRepository,
 		GitBranch:     app.GitBranch,
+		GitToken:      app.GitToken,
 		Type:          app.Type,
 		BuildCommand:  app.BuildCommand,
 		StartCommand:  app.StartCommand,

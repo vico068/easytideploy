@@ -16,6 +16,7 @@ type Application struct {
 	Slug                   string
 	GitRepository          string
 	GitBranch              string
+	GitToken               string
 	RootDirectory          string
 	Type                   string
 	RuntimeVersion         string
@@ -124,7 +125,7 @@ func NewRepository(db *database.DB) *Repository {
 // GetApplication retrieves an application by ID
 func (r *Repository) GetApplication(ctx context.Context, id string) (*Application, error) {
 	query := `
-		SELECT id, user_id, name, slug, COALESCE(git_repository, ''), COALESCE(git_branch, 'main'), COALESCE(root_directory, '/'),
+		SELECT id, user_id, name, slug, COALESCE(git_repository, ''), COALESCE(git_branch, 'main'), COALESCE(git_token, ''), COALESCE(root_directory, '/'),
 		       type, COALESCE(runtime_version, ''), COALESCE(build_command, ''), COALESCE(start_command, ''), port, replicas, cpu_limit, memory_limit,
 		       COALESCE(health_check_path, '/health'), health_check_interval, auto_deploy, ssl_enabled, status,
 		       traefik_config_updated_at, created_at, updated_at
@@ -135,7 +136,7 @@ func (r *Repository) GetApplication(ctx context.Context, id string) (*Applicatio
 	var app Application
 	err := r.db.Pool().QueryRow(ctx, query, id).Scan(
 		&app.ID, &app.UserID, &app.Name, &app.Slug, &app.GitRepository, &app.GitBranch,
-		&app.RootDirectory, &app.Type, &app.RuntimeVersion, &app.BuildCommand, &app.StartCommand,
+		&app.GitToken, &app.RootDirectory, &app.Type, &app.RuntimeVersion, &app.BuildCommand, &app.StartCommand,
 		&app.Port, &app.Replicas, &app.CPULimit, &app.MemoryLimit, &app.HealthCheckPath,
 		&app.HealthCheckInterval, &app.AutoDeploy, &app.SSLEnabled, &app.Status,
 		&app.TraefikConfigUpdatedAt, &app.CreatedAt, &app.UpdatedAt,
@@ -149,7 +150,7 @@ func (r *Repository) GetApplication(ctx context.Context, id string) (*Applicatio
 // GetApplicationBySlug retrieves an application by slug
 func (r *Repository) GetApplicationBySlug(ctx context.Context, slug string) (*Application, error) {
 	query := `
-		SELECT id, user_id, name, slug, COALESCE(git_repository, ''), COALESCE(git_branch, 'main'), COALESCE(root_directory, '/'),
+		SELECT id, user_id, name, slug, COALESCE(git_repository, ''), COALESCE(git_branch, 'main'), COALESCE(git_token, ''), COALESCE(root_directory, '/'),
 		       type, COALESCE(runtime_version, ''), COALESCE(build_command, ''), COALESCE(start_command, ''), port, replicas, cpu_limit, memory_limit,
 		       COALESCE(health_check_path, '/health'), health_check_interval, auto_deploy, ssl_enabled, status,
 		       traefik_config_updated_at, created_at, updated_at
@@ -160,7 +161,7 @@ func (r *Repository) GetApplicationBySlug(ctx context.Context, slug string) (*Ap
 	var app Application
 	err := r.db.Pool().QueryRow(ctx, query, slug).Scan(
 		&app.ID, &app.UserID, &app.Name, &app.Slug, &app.GitRepository, &app.GitBranch,
-		&app.RootDirectory, &app.Type, &app.RuntimeVersion, &app.BuildCommand, &app.StartCommand,
+		&app.GitToken, &app.RootDirectory, &app.Type, &app.RuntimeVersion, &app.BuildCommand, &app.StartCommand,
 		&app.Port, &app.Replicas, &app.CPULimit, &app.MemoryLimit, &app.HealthCheckPath,
 		&app.HealthCheckInterval, &app.AutoDeploy, &app.SSLEnabled, &app.Status,
 		&app.TraefikConfigUpdatedAt, &app.CreatedAt, &app.UpdatedAt,
@@ -174,7 +175,7 @@ func (r *Repository) GetApplicationBySlug(ctx context.Context, slug string) (*Ap
 // ListApplications retrieves all applications for a user
 func (r *Repository) ListApplications(ctx context.Context, userID string) ([]*Application, error) {
 	query := `
-		SELECT id, user_id, name, slug, COALESCE(git_repository, ''), COALESCE(git_branch, 'main'), COALESCE(root_directory, '/'),
+		SELECT id, user_id, name, slug, COALESCE(git_repository, ''), COALESCE(git_branch, 'main'), COALESCE(git_token, ''), COALESCE(root_directory, '/'),
 		       type, COALESCE(runtime_version, ''), COALESCE(build_command, ''), COALESCE(start_command, ''), port, replicas, cpu_limit, memory_limit,
 		       COALESCE(health_check_path, '/health'), health_check_interval, auto_deploy, ssl_enabled, status,
 		       traefik_config_updated_at, created_at, updated_at
@@ -194,7 +195,7 @@ func (r *Repository) ListApplications(ctx context.Context, userID string) ([]*Ap
 		var app Application
 		if err := rows.Scan(
 			&app.ID, &app.UserID, &app.Name, &app.Slug, &app.GitRepository, &app.GitBranch,
-			&app.RootDirectory, &app.Type, &app.RuntimeVersion, &app.BuildCommand, &app.StartCommand,
+			&app.GitToken, &app.RootDirectory, &app.Type, &app.RuntimeVersion, &app.BuildCommand, &app.StartCommand,
 			&app.Port, &app.Replicas, &app.CPULimit, &app.MemoryLimit, &app.HealthCheckPath,
 			&app.HealthCheckInterval, &app.AutoDeploy, &app.SSLEnabled, &app.Status,
 			&app.TraefikConfigUpdatedAt, &app.CreatedAt, &app.UpdatedAt,
