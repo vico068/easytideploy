@@ -376,7 +376,7 @@ func (c *Client) Stats(ctx context.Context, containerID string) (*ContainerStats
 		health = inspect.State.Health.Status
 	}
 
-	startedAt, _ := time.Parse(time.RFC3339, inspect.State.StartedAt)
+	startedAt, _ := time.Parse(time.RFC3339Nano, inspect.State.StartedAt)
 
 	stats := &ContainerStats{
 		ContainerID:  containerID,
@@ -386,24 +386,51 @@ func (c *Client) Stats(ctx context.Context, containerID string) (*ContainerStats
 		StartedAt:    startedAt,
 	}
 
-	// Get live stats
-	statsResp, err := c.docker.ContainerStats(ctx, containerID, false)
+	// Use stream:true to get two samples so CPU delta is meaningful.
+	// The first JSON object from Docker stream has PreCPUStats populated
+	// with the previous read, giving a proper delta for CPU calculation.
+	statsCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	statsResp, err := c.docker.ContainerStats(statsCtx, containerID, true)
 	if err != nil {
 		return stats, nil // Return partial stats on error
 	}
 	defer statsResp.Body.Close()
 
-	var statsJSON types.StatsJSON
-	if err := json.NewDecoder(statsResp.Body).Decode(&statsJSON); err != nil {
+	decoder := json.NewDecoder(statsResp.Body)
+
+	// Read first sample (may have PreCPUStats == 0 on first ever read)
+	var first types.StatsJSON
+	if err := decoder.Decode(&first); err != nil {
 		return stats, nil
 	}
 
+	// Check if first sample already has valid CPU deltas
+	cpuDelta := float64(first.CPUStats.CPUUsage.TotalUsage - first.PreCPUStats.CPUUsage.TotalUsage)
+	systemDelta := float64(first.CPUStats.SystemUsage - first.PreCPUStats.SystemUsage)
+
+	var statsJSON types.StatsJSON
+	if cpuDelta > 0 && systemDelta > 0 {
+		// First sample is good enough
+		statsJSON = first
+	} else {
+		// Read second sample for proper CPU delta
+		if err := decoder.Decode(&statsJSON); err != nil {
+			// Use first sample anyway for memory/network/etc
+			statsJSON = first
+		}
+	}
+
 	// Calculate CPU percentage
-	cpuDelta := float64(statsJSON.CPUStats.CPUUsage.TotalUsage - statsJSON.PreCPUStats.CPUUsage.TotalUsage)
-	systemDelta := float64(statsJSON.CPUStats.SystemUsage - statsJSON.PreCPUStats.SystemUsage)
+	cpuDelta = float64(statsJSON.CPUStats.CPUUsage.TotalUsage - statsJSON.PreCPUStats.CPUUsage.TotalUsage)
+	systemDelta = float64(statsJSON.CPUStats.SystemUsage - statsJSON.PreCPUStats.SystemUsage)
 	cpuCount := float64(statsJSON.CPUStats.OnlineCPUs)
 	if cpuCount == 0 {
 		cpuCount = float64(len(statsJSON.CPUStats.CPUUsage.PercpuUsage))
+	}
+	if cpuCount == 0 {
+		cpuCount = 1
 	}
 	if systemDelta > 0 && cpuDelta > 0 {
 		stats.CPUPercent = (cpuDelta / systemDelta) * cpuCount * 100.0

@@ -97,19 +97,9 @@ func (s *Scheduler) collectServerAndContainerMetrics() {
 		for _, container := range containers {
 			containerStats, err := client.GetContainerStats(ctx, container.DockerContainerID)
 			if err != nil {
-				log.Error().Str("container_id", container.ID).Str("docker_id", container.DockerContainerID).Err(err).Msg("failed to get container stats")
+				log.Error().Str("container_id", container.ID).Err(err).Msg("failed to get container stats")
 				continue
 			}
-
-			log.Debug().
-				Str("container_id", container.ID).
-				Str("docker_id", container.DockerContainerID).
-				Float64("cpu", containerStats.CpuPercent).
-				Float64("mem_pct", containerStats.MemoryPercent).
-				Int64("mem_usage", containerStats.MemoryUsage).
-				Int64("mem_limit", containerStats.MemoryLimit).
-				Str("status", containerStats.Status).
-				Msg("container stats received")
 
 			// 7. Persist container metrics
 			if err := s.saveContainerMetrics(container, containerStats); err != nil {
