@@ -68,12 +68,16 @@ class MonitoringDashboard extends Page
 
     protected function getViewData(): array
     {
+        // PostgreSQL session timezone is America/Sao_Paulo, so all timestamps
+        // stored via NOW() are in that timezone. Convert $since to match.
+        $dbTz = 'America/Sao_Paulo';
+
         $since = match ($this->period) {
-            '1h' => now()->subHour(),
-            '6h' => now()->subHours(6),
-            '24h' => now()->subDay(),
-            '7d' => now()->subWeek(),
-            default => now()->subHour(),
+            '1h' => now($dbTz)->subHour(),
+            '6h' => now($dbTz)->subHours(6),
+            '24h' => now($dbTz)->subDay(),
+            '7d' => now($dbTz)->subWeek(),
+            default => now($dbTz)->subHour(),
         };
 
         $bucketSeconds = match ($this->period) {
@@ -113,7 +117,7 @@ class MonitoringDashboard extends Page
             $recentStats = null;
             if (! empty($containerIds)) {
                 $recentStats = ResourceUsage::whereIn('container_id', $containerIds)
-                    ->where('recorded_at', '>=', now()->subMinutes(5))
+                    ->where('recorded_at', '>=', now($dbTz)->subMinutes(5))
                     ->select([
                         DB::raw('AVG(cpu_percent) as avg_cpu'),
                         DB::raw('AVG(memory_percent) as avg_memory'),
