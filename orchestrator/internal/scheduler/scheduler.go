@@ -90,6 +90,10 @@ func (s *Scheduler) Start() {
 	s.wg.Add(1)
 	go s.cleanupOldRepos()
 
+	// Metrics collection every 30 seconds
+	s.wg.Add(1)
+	go s.collectMetrics()
+
 	log.Info().Msg("Scheduler started")
 }
 
