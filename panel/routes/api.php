@@ -67,7 +67,8 @@ Route::post('/internal/metrics/batch', function (\Illuminate\Http\Request $reque
         'http_metrics.*.total_requests' => 'integer|min:0',
     ]);
 
-    $recordedAt = $validated['timestamp'];
+    // Converter timestamp para UTC (orchestrator pode enviar em timezone local)
+    $recordedAt = \Carbon\Carbon::parse($validated['timestamp'])->utc()->toDateTimeString();
 
     foreach ($validated['http_metrics'] as $metric) {
         HttpMetric::create([

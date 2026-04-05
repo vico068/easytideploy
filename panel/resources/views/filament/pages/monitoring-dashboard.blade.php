@@ -198,8 +198,11 @@
     </div>
 
     {{-- ============================================================
-         CHARTS
+         CHARTS — data in JSON tags, rendered by @script
     ============================================================ --}}
+    <script id="httpChartData" type="application/json">@json($httpChartData)</script>
+    <script id="resourceChartData" type="application/json">@json($resourceChartData)</script>
+
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
 
         {{-- HTTP Requests Chart --}}
@@ -218,7 +221,7 @@
             </div>
 
             @if(count($httpChartData['labels']) > 0)
-                <div class="h-56"><canvas id="httpChart"></canvas></div>
+                <div class="h-56" id="httpChartContainer" wire:ignore><canvas></canvas></div>
             @else
                 <div class="h-56 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700">
                     <x-heroicon-o-globe-alt class="w-10 h-10 mb-2 opacity-30" />
@@ -255,7 +258,7 @@
             </div>
 
             @if(isset($resourceChartData['labels']) && count($resourceChartData['labels']) > 0)
-                <div class="h-56"><canvas id="resourceChart"></canvas></div>
+                <div class="h-56" id="resourceChartContainer" wire:ignore><canvas></canvas></div>
             @else
                 <div class="h-56 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700">
                     <x-heroicon-o-chart-bar class="w-10 h-10 mb-2 opacity-30" />
@@ -349,13 +352,16 @@
 
 </div>
 
-@push('scripts')
+@assets
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+@endassets
+
+@script
 <script>
 (function () {
     const isDark = document.documentElement.classList.contains('dark');
-    const gridColor   = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
-    const tickColor   = isDark ? '#64748b' : '#94a3b8';
+    const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+    const tickColor = isDark ? '#64748b' : '#94a3b8';
 
     const sharedOptions = {
         responsive: true,
@@ -366,9 +372,6 @@
             point: { radius: 0, hoverRadius: 6, hoverBorderWidth: 2 },
         },
         plugins: {
-            legend: {
-                display: false,
-            },
             tooltip: {
                 backgroundColor: 'rgba(15,23,42,0.95)',
                 borderColor: 'rgba(255,255,255,0.08)',
@@ -393,98 +396,88 @@
         },
     };
 
-    // ──── HTTP Chart ────
-    const httpEl = document.getElementById('httpChart');
-    if (httpEl) {
-        new Chart(httpEl, {
-            type: 'line',
-            data: {
-                labels: @json($httpChartData['labels'] ?? []),
-                datasets: [
-                    {
-                        label: '2xx',
-                        data: @json($httpChartData['2xx'] ?? []),
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16,185,129,0.08)',
-                        fill: true,
-                    },
-                    {
-                        label: '3xx',
-                        data: @json($httpChartData['3xx'] ?? []),
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59,130,246,0.08)',
-                        fill: true,
-                    },
-                    {
-                        label: '4xx',
-                        data: @json($httpChartData['4xx'] ?? []),
-                        borderColor: '#f59e0b',
-                        backgroundColor: 'rgba(245,158,11,0.08)',
-                        fill: true,
-                    },
-                    {
-                        label: '5xx',
-                        data: @json($httpChartData['5xx'] ?? []),
-                        borderColor: '#ef4444',
-                        backgroundColor: 'rgba(239,68,68,0.08)',
-                        fill: true,
-                    },
-                ],
-            },
-            options: {
-                ...sharedOptions,
-                plugins: {
-                    ...sharedOptions.plugins,
-                    legend: { display: true, position: 'bottom', labels: { color: tickColor, usePointStyle: true, padding: 16, font: { size: 11 } } },
-                },
-            },
-        });
-    }
+    const legendOpts = { display: true, position: 'bottom', labels: { color: tickColor, usePointStyle: true, padding: 16, font: { size: 11 } } };
 
-    // ──── Resource Chart ────
-    const rcEl = document.getElementById('resourceChart');
-    if (rcEl) {
-        const datasets = @json($resourceChartData['datasets'] ?? []);
-        new Chart(rcEl, {
-            type: 'line',
-            data: {
-                labels: @json($resourceChartData['labels'] ?? []),
-                datasets: datasets.map(d => ({
-                    label: d.label,
-                    data: d.data,
-                    borderColor: d.borderColor,
-                    backgroundColor: d.backgroundColor,
-                    borderDash: d.borderDash ?? [],
-                    fill: false,
-                    tension: 0.4,
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    hoverRadius: 5,
-                })),
-            },
-            options: {
-                ...sharedOptions,
-                plugins: {
-                    ...sharedOptions.plugins,
-                    legend: { display: true, position: 'bottom', labels: { color: tickColor, usePointStyle: true, padding: 16, font: { size: 11 } } },
-                },
-                scales: { ...sharedOptions.scales, y: { ...sharedOptions.scales.y, max: 100 } },
-            },
-        });
-    }
+    function initCharts() {
+        // Read fresh data from JSON tags (Livewire updates these on re-render)
+        const httpDataEl = document.getElementById('httpChartData');
+        const rcDataEl   = document.getElementById('resourceChartData');
 
-    // Auto-scroll de logs
-    const logsContainer = document.getElementById('logsContainer');
-    if (logsContainer) {
-        logsContainer.scrollTop = logsContainer.scrollHeight;
-    }
+        // ── HTTP Chart ──
+        const httpContainer = document.getElementById('httpChartContainer');
+        if (httpContainer && httpDataEl) {
+            const canvas = httpContainer.querySelector('canvas');
+            const existing = Chart.getChart(canvas);
+            if (existing) existing.destroy();
 
-    // Re-scroll ao refresh Livewire
-    document.addEventListener('livewire:updated', () => {
+            const data = JSON.parse(httpDataEl.textContent);
+            if (data.labels && data.labels.length > 0) {
+                new Chart(canvas, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: [
+                            { label: '2xx', data: data['2xx'] || [], borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', fill: true },
+                            { label: '3xx', data: data['3xx'] || [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', fill: true },
+                            { label: '4xx', data: data['4xx'] || [], borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.08)', fill: true },
+                            { label: '5xx', data: data['5xx'] || [], borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.08)', fill: true },
+                        ],
+                    },
+                    options: { ...sharedOptions, plugins: { ...sharedOptions.plugins, legend: legendOpts } },
+                });
+            }
+        }
+
+        // ── Resource Chart ──
+        const rcContainer = document.getElementById('resourceChartContainer');
+        if (rcContainer && rcDataEl) {
+            const canvas = rcContainer.querySelector('canvas');
+            const existing = Chart.getChart(canvas);
+            if (existing) existing.destroy();
+
+            const rcData = JSON.parse(rcDataEl.textContent);
+            if (rcData.labels && rcData.labels.length > 0) {
+                new Chart(canvas, {
+                    type: 'line',
+                    data: {
+                        labels: rcData.labels,
+                        datasets: (rcData.datasets || []).map(d => ({
+                            label: d.label,
+                            data: d.data,
+                            borderColor: d.borderColor,
+                            backgroundColor: d.backgroundColor,
+                            borderDash: d.borderDash || [],
+                            fill: false,
+                            tension: 0.4,
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            hoverRadius: 5,
+                        })),
+                    },
+                    options: {
+                        ...sharedOptions,
+                        plugins: { ...sharedOptions.plugins, legend: legendOpts },
+                        scales: { ...sharedOptions.scales, y: { ...sharedOptions.scales.y, max: 100 } },
+                    },
+                });
+            }
+        }
+
+        // Auto-scroll logs
         const lc = document.getElementById('logsContainer');
         if (lc) lc.scrollTop = lc.scrollHeight;
+    }
+
+    // Initial render
+    $nextTick(() => initCharts());
+
+    // Reinitialize after every Livewire DOM update (debounced)
+    let chartDebounce = null;
+    Livewire.hook('morph.updated', () => {
+        clearTimeout(chartDebounce);
+        chartDebounce = setTimeout(() => initCharts(), 80);
     });
 })();
 </script>
-@endpush
+@endscript
 </x-filament-panels::page>
