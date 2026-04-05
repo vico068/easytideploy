@@ -246,7 +246,7 @@ func (s *Scheduler) saveContainerMetrics(container DatabaseContainer, stats inte
 		container.ServerID,
 		st.CpuPercent,
 		st.MemoryPercent,
-		st.MemoryUsage,
+		float64(st.MemoryUsage)/(1024*1024), // bytes to MB
 		st.NetworkRxBytes,
 		st.NetworkTxBytes,
 		st.BlockRead,
