@@ -19,13 +19,13 @@ Route::prefix('webhooks')->group(function () {
 
 // Internal API (called by orchestrator)
 // Get application details with decrypted secrets - secured with orchestrator API key
-Route::get('/internal/applications/{application}', function ($application, \Illuminate\Http\Request $request) {
+Route::get('/internal/applications/{id}', function ($id, \Illuminate\Http\Request $request) {
     $apiKey = $request->bearerToken();
     if (! $apiKey || ! hash_equals(config('easydeploy.orchestrator_api_key') ?? '', $apiKey)) {
         return response()->json(['error' => 'Unauthorized'], 401);
     }
 
-    $app = \App\Models\Application::findOrFail($application);
+    $app = \App\Models\Application::findOrFail($id);
     $envVars = $app->getEnvironmentArray();
 
     return response()->json([
