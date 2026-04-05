@@ -260,7 +260,7 @@ func (s *Scheduler) saveContainerMetrics(container DatabaseContainer, stats inte
 		Float64("cpu", st.CpuPercent).
 		Float64("mem_pct", st.MemoryPercent).
 		Float64("mem_mb", memoryMB).
-		Str("query_preview", query[:200]).
+		Str("full_query", query).
 		Msg("saving container metrics")
 
 	_, err := s.db.Pool().Exec(context.Background(), query)
