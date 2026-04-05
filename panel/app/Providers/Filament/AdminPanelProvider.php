@@ -33,7 +33,6 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogo(asset('images/logo-vertical-easyti-cloud.png'))
             ->brandLogoHeight('2.5rem')
             ->font('Manrope')
-            ->viteTheme('resources/css/filament/admin/theme.css')
             ->sidebarWidth('280px')
             ->colors([
                 'primary' => Color::Sky,

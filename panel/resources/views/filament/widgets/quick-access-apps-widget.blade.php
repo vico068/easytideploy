@@ -1,26 +1,27 @@
+{{-- Quick Access Apps Widget --}}
 <div>
     <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+        <h2 class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">
             Acesso Rápido
         </h2>
         @if(!$apps->isEmpty())
-            <span class="text-xs text-slate-400 dark:text-slate-500">{{ $apps->count() }} apps</span>
+            <span class="text-xs text-slate-400 dark:text-slate-500 tabular-nums">{{ $apps->count() }} apps</span>
         @endif
     </div>
 
     @if($apps->isEmpty())
-        <div class="rounded-2xl border-2 border-dashed border-gray-200 dark:border-white/[0.06] p-8 text-center">
-            <div class="w-12 h-12 mx-auto mb-3 rounded-2xl bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center">
-                <x-heroicon-o-cube class="w-6 h-6 text-slate-400 dark:text-slate-500" />
+        <div class="rounded-2xl border-2 border-dashed border-gray-200 dark:border-slate-700 p-8 text-center">
+            <div class="w-12 h-12 mx-auto mb-3 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                <x-heroicon-o-cube class="w-6 h-6 text-slate-400" />
             </div>
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Nenhuma aplicação cadastrada</p>
-            <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">Crie sua primeira app para começar a fazer deploy</p>
+            <p class="text-sm font-semibold text-slate-600 dark:text-slate-300">Nenhuma aplicação</p>
+            <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">Crie sua primeira app para fazer deploy</p>
             <a href="{{ \App\Filament\Resources\ApplicationResource::getUrl('create') }}"
-               class="inline-flex items-center gap-1.5 mt-4 px-3 py-1.5 rounded-lg
-                      text-sm font-medium text-white
-                      bg-gradient-to-r from-brand-600 to-cyan-500
-                      hover:from-brand-500 hover:to-cyan-400
-                      transition-all duration-200 shadow-lg shadow-brand-500/25">
+               class="inline-flex items-center gap-1.5 mt-4 px-4 py-2 rounded-xl
+                      text-sm font-semibold text-white
+                      bg-gradient-to-r from-sky-500 to-cyan-500
+                      hover:from-sky-400 hover:to-cyan-400
+                      transition-all duration-200 shadow-lg shadow-sky-500/25">
                 <x-heroicon-m-plus class="w-4 h-4" />
                 Criar aplicação
             </a>
@@ -37,75 +38,61 @@
                         'failed'     => 'bg-red-500',
                         default      => 'bg-slate-400',
                     };
-                    $borderGlow = match($statusValue) {
-                        'active'     => 'dark:hover:border-emerald-500/30',
-                        'deploying',
-                        'building'   => 'dark:hover:border-amber-500/30',
-                        'failed'     => 'dark:hover:border-red-500/30',
-                        default      => 'dark:hover:border-sky-500/30',
+                    $hoverBorder = match($statusValue) {
+                        'active'            => 'hover:border-emerald-400/60 dark:hover:border-emerald-500/40',
+                        'deploying','building' => 'hover:border-amber-400/60 dark:hover:border-amber-500/40',
+                        'failed'            => 'hover:border-red-400/60 dark:hover:border-red-500/40',
+                        default             => 'hover:border-sky-400/60 dark:hover:border-sky-500/40',
                     };
-                    $shadowGlow = match($statusValue) {
-                        'active'     => 'hover:shadow-emerald-500/10',
-                        'deploying',
-                        'building'   => 'hover:shadow-amber-500/10',
-                        'failed'     => 'hover:shadow-red-500/10',
-                        default      => 'hover:shadow-sky-500/10',
-                    };
-                    $stagger = 'stagger-' . min($index + 1, 6);
                     $avgCpu = $app->containers->avg('cpu_usage') ?? 0;
                 @endphp
-                <div class="card-premium {{ $stagger }} group relative
-                            bg-white dark:bg-slate-900/60 rounded-xl p-4
-                            border border-gray-100 dark:border-white/[0.06]
-                            hover:bg-gray-50/80 dark:hover:bg-slate-800/50
-                            hover:border-gray-200 {{ $borderGlow }}
-                            hover:shadow-md {{ $shadowGlow }}
-                            backdrop-blur-sm overflow-hidden">
+                <div class="group relative overflow-hidden rounded-xl p-4
+                            bg-white dark:bg-slate-800/70
+                            border border-gray-100 dark:border-slate-700/60
+                            {{ $hoverBorder }}
+                            hover:shadow-md
+                            transition-all duration-250">
 
-                    {{-- Glow decorativo no canto --}}
-                    <div class="absolute top-0 right-0 w-16 h-16 rounded-full blur-xl -translate-y-4 translate-x-4
-                                pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300
-                                {{ $statusValue === 'active' ? 'bg-emerald-500/15' : ($statusValue === 'failed' ? 'bg-red-500/15' : 'bg-sky-500/15') }}">
-                    </div>
-
-                    {{-- Status + containers --}}
+                    {{-- Status dot + containers --}}
                     <div class="flex items-center justify-between mb-3">
                         <div class="flex items-center gap-1.5">
-                            <div class="w-2 h-2 rounded-full {{ $statusDot }} flex-shrink-0"></div>
-                            <span class="text-xs text-slate-500 dark:text-slate-500 tabular-nums">
+                            <div class="w-2 h-2 rounded-full flex-shrink-0 {{ $statusDot }}"></div>
+                            <span class="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
                                 {{ $app->containers_count }}c
                             </span>
                         </div>
                         @if($avgCpu > 0)
-                            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-md tabular-nums
+                            <span class="text-[10px] font-mono px-1 py-0.5 rounded-md tabular-nums
                                          {{ $avgCpu > 80
-                                            ? 'text-red-600 bg-red-50 dark:bg-red-500/10 dark:text-red-400'
-                                            : 'text-slate-500 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/80' }}">
+                                            ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
+                                            : 'bg-slate-50 text-slate-500 dark:bg-slate-700/60 dark:text-slate-400' }}">
                                 {{ round($avgCpu) }}%
                             </span>
                         @endif
                     </div>
 
-                    {{-- App name --}}
+                    {{-- Nome --}}
                     <h3 class="font-semibold text-gray-900 dark:text-slate-100 text-sm truncate
-                               group-hover:text-sky-600 dark:group-hover:text-brand-400 transition-colors duration-200">
+                               group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">
                         {{ $app->name }}
                     </h3>
-                    <p class="text-[10px] text-slate-400 dark:text-slate-600 truncate mt-0.5 font-mono">
+                    <p class="text-[10px] text-slate-400 dark:text-slate-500 truncate mt-0.5 font-mono">
                         {{ $app->slug }}
                     </p>
 
-                    {{-- Actions --}}
-                    <div class="flex items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-white/[0.05]">
+                    {{-- Ações --}}
+                    <div class="flex items-center gap-1.5 mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/40">
                         <a href="{{ \App\Filament\Resources\ApplicationResource::getUrl('edit', ['record' => $app]) }}"
-                           class="flex-1 text-center text-[10px] font-semibold text-slate-500 dark:text-slate-500
-                                  hover:text-sky-600 dark:hover:text-brand-400 transition-colors uppercase tracking-wide">
+                           class="flex-1 text-center text-[10px] font-semibold uppercase tracking-wide
+                                  text-slate-400 dark:text-slate-500
+                                  hover:text-sky-600 dark:hover:text-sky-400 transition-colors py-0.5">
                             Editar
                         </a>
-                        <span class="text-slate-200 dark:text-slate-700">·</span>
+                        <span class="text-slate-200 dark:text-slate-600 text-xs">·</span>
                         <a href="{{ route('filament.admin.pages.monitoring-dashboard', ['app' => $app->id]) }}"
-                           class="flex-1 text-center text-[10px] font-semibold text-slate-500 dark:text-slate-500
-                                  hover:text-sky-600 dark:hover:text-brand-400 transition-colors uppercase tracking-wide">
+                           class="flex-1 text-center text-[10px] font-semibold uppercase tracking-wide
+                                  text-slate-400 dark:text-slate-500
+                                  hover:text-sky-600 dark:hover:text-sky-400 transition-colors py-0.5">
                             Monitor
                         </a>
                     </div>

@@ -1,46 +1,31 @@
-/* Addon CSS para views customizadas do Filament (widgets + páginas)
-   SEM @tailwind base para não conflitar com o reset do Filament */
+/* ================================================================
+   EasyDeploy Dark Premium — filament-addon.css
+   Carregado via renderHook panels::head.end APÓS o CSS do Filament.
+   NÃO usar @tailwind base (conflita com o reset do Filament).
+   ================================================================ */
 @tailwind components;
 @tailwind utilities;
 
-/* ================================================
-   1. ANIMAÇÕES GLOBAIS
-   ================================================ */
+/* ================================================================
+   1. KEYFRAMES (fora de @layer para ter escopo global)
+   ================================================================ */
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0);   }
+}
+
+@keyframes buildingPulse {
+    0%, 100% { opacity: 1;    }
+    50%       { opacity: 0.35; }
+}
+
+/* ================================================================
+   2. UTILITÁRIOS
+   ================================================================ */
 @layer utilities {
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translateY(10px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
+    .animate-fade-in-up { animation: fadeInUp      0.35s ease-out    both;     }
+    .animate-building   { animation: buildingPulse 1.4s  ease-in-out infinite; }
 
-    @keyframes buildingPulse {
-        0%, 100% { opacity: 1; }
-        50%       { opacity: 0.35; }
-    }
-
-    @keyframes statusGlow {
-        0%, 100% { box-shadow: 0 0 0 0 rgba(13, 139, 250, 0.25); }
-        50%       { box-shadow: 0 0 0 6px rgba(13, 139, 250, 0); }
-    }
-
-    .animate-fade-in-up {
-        animation: fadeInUp 0.3s ease-out both;
-    }
-
-    .animate-building {
-        animation: buildingPulse 1.4s ease-in-out infinite;
-    }
-
-    .animate-status-glow {
-        animation: statusGlow 2s ease-in-out infinite;
-    }
-
-    /* Stagger de entrada para grids de cards */
     .stagger-1 { animation-delay: 0.05s; }
     .stagger-2 { animation-delay: 0.10s; }
     .stagger-3 { animation-delay: 0.15s; }
@@ -49,120 +34,176 @@
     .stagger-6 { animation-delay: 0.30s; }
 }
 
-/* ================================================
-   2. SCROLLBAR CUSTOMIZADA (webkit)
-   ================================================ */
-.scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: #334155 transparent;
-}
-
-.scrollbar-thin::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-thumb {
-    background: #334155;
-    border-radius: 99px;
-}
-
-.scrollbar-thin::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-/* Scrollbar global sutil no dark mode */
-.dark ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-
-.dark ::-webkit-scrollbar-thumb {
-    background: rgba(51, 65, 85, 0.8);
-    border-radius: 99px;
-}
-
-.dark ::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-/* ================================================
-   3. CARDS PREMIUM — efeito sutil de entrada
-   ================================================ */
+/* ================================================================
+   3. CARD PREMIUM
+   Sem @apply — evita cards invisíveis por falha de animação
+   ================================================================ */
 .card-premium {
-    @apply animate-fade-in-up;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.25s ease, border-color 0.2s ease;
 }
-
 .card-premium:hover {
     transform: translateY(-2px);
 }
 
-/* ================================================
-   4. CÓDIGO / MONOSPACE — unificado
-   ================================================ */
-.font-mono,
-code,
-pre,
-[data-monospace],
-.font-code {
+/* ================================================================
+   4. SCROLLBAR
+   ================================================================ */
+.scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #334155 transparent;
+}
+.scrollbar-thin::-webkit-scrollbar        { width: 5px; height: 5px; }
+.scrollbar-thin::-webkit-scrollbar-thumb  { background: #334155; border-radius: 99px; }
+.scrollbar-thin::-webkit-scrollbar-track  { background: transparent; }
+
+.dark ::-webkit-scrollbar        { width: 6px; height: 6px; }
+.dark ::-webkit-scrollbar-thumb  { background: rgba(51,65,85,0.8); border-radius: 99px; }
+.dark ::-webkit-scrollbar-track  { background: transparent; }
+
+/* ================================================================
+   5. TIPOGRAFIA
+   ================================================================ */
+.font-mono, code, pre, [data-monospace], .font-code {
     font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code',
                  ui-monospace, 'Courier New', monospace !important;
 }
 
-/* ================================================
-   5. TERMINAL VIEWER — override de paleta
-   ================================================ */
-.terminal-container {
-    background-color: #0a0f1a !important;
-    border-color: rgba(255, 255, 255, 0.07) !important;
-}
-
-/* ================================================
-   6. TIPOGRAFIA — headings com Space Grotesk
-   ================================================ */
 .fi-header-heading {
     font-family: 'Space Grotesk', 'Manrope', sans-serif !important;
     letter-spacing: -0.02em;
 }
 
-/* ================================================
-   7. BADGES DE STATUS — border sutil
-   ================================================ */
-.status-running {
-    border-color: rgba(34, 197, 94, 0.2) !important;
+/* ================================================================
+   6. BACKGROUND GLOBAL
+   ================================================================ */
+.dark body,
+.dark .fi-layout,
+.dark .fi-simple-layout {
+    background-color: #080c14 !important;
+}
+.dark .fi-main {
+    background-color: #080c14 !important;
 }
 
-.status-building,
-.status-deploying {
-    border-color: rgba(245, 158, 11, 0.2) !important;
+/* ================================================================
+   7. SIDEBAR
+   ================================================================ */
+.dark .fi-sidebar {
+    background: linear-gradient(180deg, #0d1424 0%, #0a1120 100%) !important;
+    border-right: 1px solid rgba(255,255,255,0.06) !important;
 }
 
-.status-failed {
-    border-color: rgba(244, 63, 94, 0.2) !important;
+.dark .fi-sidebar-item-active > .fi-sidebar-item-button {
+    background: linear-gradient(90deg, rgba(13,139,250,0.16) 0%, rgba(13,139,250,0.02) 100%) !important;
+    border-left: 2px solid #0d8bfa !important;
+    color: #60b8ff !important;
+}
+.dark .fi-sidebar-item-active > .fi-sidebar-item-button svg {
+    color: #0d8bfa !important;
+}
+.dark .fi-sidebar-item-button:hover {
+    background-color: rgba(255,255,255,0.04) !important;
+}
+.dark .fi-sidebar-group-label {
+    color: #475569 !important;
+    font-size: 0.63rem !important;
+    letter-spacing: 0.09em !important;
+    text-transform: uppercase !important;
 }
 
-/* ================================================
-   8. TABELA — linha ativa com highlight
-   ================================================ */
-.dark .fi-ta-row.fi-ta-row-selected td,
+/* ================================================================
+   8. TOPBAR
+   ================================================================ */
+.dark .fi-topbar,
+.dark .fi-topbar nav {
+    background-color: rgba(8,12,20,0.92) !important;
+    border-bottom: 1px solid rgba(255,255,255,0.06) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+}
+
+/* ================================================================
+   9. SEÇÕES / CARDS DO FILAMENT
+   ================================================================ */
+.dark .fi-section {
+    background-color: rgba(17,24,39,0.7) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 1rem !important;
+}
+.dark .fi-section-header {
+    border-bottom-color: rgba(255,255,255,0.06) !important;
+}
+
+/* Widget wrappers transparentes */
+.dark .fi-wi-widget {
+    background-color: transparent !important;
+    border: none !important;
+}
+
+/* ================================================================
+   10. TABELAS
+   ================================================================ */
+.dark .fi-ta-ctn {
+    background-color: rgba(13,17,23,0.8) !important;
+    border: 1px solid rgba(255,255,255,0.07) !important;
+    border-radius: 1rem !important;
+    overflow: hidden;
+}
+.dark .fi-ta-header-cell {
+    background-color: rgba(255,255,255,0.02) !important;
+    border-bottom-color: rgba(255,255,255,0.07) !important;
+}
+.dark .fi-ta-row:hover .fi-ta-cell {
+    background-color: rgba(13,139,250,0.04) !important;
+}
 .dark .fi-ta-row.fi-ta-row-selected .fi-ta-cell {
-    background-color: rgba(13, 139, 250, 0.08) !important;
+    background-color: rgba(13,139,250,0.08) !important;
 }
 
-/* ================================================
-   9. FOCUS RING — cor brand
-   ================================================ */
+/* ================================================================
+   11. INPUTS / FORMS
+   ================================================================ */
+.dark .fi-input {
+    background-color: #1a2236 !important;
+    border-color: rgba(255,255,255,0.10) !important;
+    color: #f1f5f9 !important;
+}
+.dark .fi-input:focus {
+    border-color: #0d8bfa !important;
+    box-shadow: 0 0 0 3px rgba(13,139,250,0.12) !important;
+}
+.dark .fi-fo-field-wrp-hint {
+    color: #64748b !important;
+}
+
+/* ================================================================
+   12. MODAIS
+   ================================================================ */
+.dark .fi-modal-window {
+    background-color: #111827 !important;
+    border: 1px solid rgba(255,255,255,0.08) !important;
+    border-radius: 1.5rem !important;
+}
+
+/* ================================================================
+   13. BADGES
+   ================================================================ */
+.dark .fi-badge {
+    backdrop-filter: blur(4px);
+}
+
+/* ================================================================
+   14. FOCUS RING
+   ================================================================ */
 .dark *:focus-visible {
     outline-color: #0d8bfa !important;
     outline-offset: 2px;
 }
 
-/* ================================================
-   10. HEADER/TOPBAR BLUR
-   ================================================ */
-.dark .fi-topbar nav {
-    background-color: rgba(8, 12, 20, 0.85) !important;
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+/* ================================================================
+   15. TERMINAL VIEWER
+   ================================================================ */
+.terminal-container {
+    background-color: #0a0f1a !important;
+    border-color: rgba(255,255,255,0.07) !important;
 }

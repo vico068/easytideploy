@@ -34,32 +34,42 @@ class ApplicationResource extends Resource
         return $form
             ->schema([
                 Forms\Components\Section::make('Informações básicas')
-                    ->description('Configure o nome e tipo da sua aplicação')
+                    ->description('Identifique sua aplicação e escolha o runtime que será utilizado no build')
                     ->icon('heroicon-o-information-circle')
                     ->schema([
                         Forms\Components\TextInput::make('name')
-                            ->label('Nome')
+                            ->label('Nome da aplicação')
                             ->required()
                             ->maxLength(255)
                             ->live(onBlur: true)
-                            ->helperText('Nome descritivo da sua aplicação')
+                            ->prefixIcon('heroicon-o-tag')
+                            ->placeholder('Ex: API Produção, Frontend Web, Worker Queue')
+                            ->helperText('Nome exibido no dashboard e nas notificações de deploy')
+                            ->hint('Use nomes descritivos como "API Users v2" ou "Frontend Marketing"')
+                            ->hintIcon('heroicon-m-light-bulb')
                             ->afterStateUpdated(fn ($state, Forms\Set $set) => $set('slug', Str::slug($state))),
 
                         Forms\Components\TextInput::make('slug')
-                            ->label('Slug (URL)')
+                            ->label('Subdomínio')
                             ->required()
                             ->unique(ignoreRecord: true)
                             ->prefix('https://')
                             ->suffix('.apps.easyti.cloud')
                             ->maxLength(255)
-                            ->helperText('URL onde sua aplicação será acessada'),
+                            ->helperText('Gerado automaticamente pelo nome — pode ser personalizado')
+                            ->hint('Apenas letras minúsculas, números e hífens são permitidos')
+                            ->hintIcon('heroicon-o-globe-alt'),
 
                         Forms\Components\Select::make('type')
-                            ->label('Tipo')
+                            ->label('Runtime / Linguagem')
                             ->options(ApplicationType::class)
                             ->required()
                             ->live()
-                            ->helperText('Escolha a linguagem/runtime da sua aplicação')
+                            ->native(false)
+                            ->prefixIcon('heroicon-o-cpu-chip')
+                            ->helperText('A porta e os comandos padrão serão preenchidos automaticamente')
+                            ->hint('Porta e comandos são configurados automaticamente ao selecionar')
+                            ->hintIcon('heroicon-m-sparkles')
                             ->afterStateUpdated(function ($state, Forms\Set $set) {
                                 if ($state) {
                                     $type = ApplicationType::from($state);
@@ -70,88 +80,115 @@ class ApplicationResource extends Resource
                             }),
 
                         Forms\Components\Select::make('status')
-                            ->label('Status')
+                            ->label('Status atual')
                             ->options(ApplicationStatus::class)
                             ->default('stopped')
                             ->disabled()
                             ->dehydrated(false)
-                            ->helperText('Gerenciado automaticamente pelo sistema'),
+                            ->prefixIcon('heroicon-o-signal')
+                            ->helperText('Gerenciado automaticamente pelo sistema após cada deploy'),
                     ])
                     ->columns(2),
 
                 Forms\Components\Section::make('Repositório Git')
-                    ->description('Conecte seu repositório para deploy automático')
+                    ->description('Conecte seu repositório para habilitar deploys automáticos a cada git push')
                     ->icon('heroicon-o-code-bracket')
                     ->schema([
                         Forms\Components\TextInput::make('git_repository')
                             ->label('URL do repositório')
                             ->url()
-                            ->placeholder('https://github.com/usuario/repositorio')
-                            ->helperText('URL HTTPS do seu repositório Git (GitHub, GitLab, etc.)'),
+                            ->prefixIcon('heroicon-o-code-bracket-square')
+                            ->placeholder('https://github.com/sua-org/seu-projeto')
+                            ->helperText('Suporta GitHub, GitLab, Bitbucket e qualquer servidor Git com acesso HTTPS')
+                            ->hint('Use HTTPS — autenticação via token de acesso abaixo')
+                            ->hintIcon('heroicon-o-lock-closed')
+                            ->columnSpanFull(),
 
                         Forms\Components\TextInput::make('git_branch')
-                            ->label('Branch')
+                            ->label('Branch de deploy')
                             ->default('main')
-                            ->helperText('Branch que será monitorada para deploys'),
-
-                        Forms\Components\TextInput::make('git_token')
-                            ->label('Token de acesso')
-                            ->password()
-                            ->revealable()
-                            ->helperText('Personal Access Token para repositórios privados (opcional)'),
+                            ->prefixIcon('heroicon-o-bookmark')
+                            ->placeholder('main')
+                            ->helperText('Branch monitorada — pushes nela disparam deploys automáticos'),
 
                         Forms\Components\TextInput::make('root_directory')
                             ->label('Diretório raiz')
                             ->default('/')
+                            ->prefixIcon('heroicon-o-folder')
                             ->placeholder('/')
-                            ->helperText('Use "/" para raiz ou "/backend" para subdiretório'),
+                            ->helperText('Use "/" para a raiz ou "/api" para um subprojeto dentro do repositório'),
+
+                        Forms\Components\TextInput::make('git_token')
+                            ->label('Token de acesso (PAT)')
+                            ->password()
+                            ->revealable()
+                            ->prefixIcon('heroicon-o-key')
+                            ->placeholder('ghp_xxxxxxxxxxxxxxxxxxxx')
+                            ->helperText('Personal Access Token para repositórios privados — opcional para repos públicos')
+                            ->hint('Armazenado de forma segura com criptografia AES-256')
+                            ->hintIcon('heroicon-o-shield-check')
+                            ->columnSpanFull(),
                     ])
                     ->columns(2),
 
                 Forms\Components\Section::make('Build & Deploy')
-                    ->description('Configure como sua aplicação será compilada e iniciada')
-                    ->icon('heroicon-o-cog-6-tooth')
+                    ->description('Configure como sua aplicação é compilada e inicializada a cada deploy')
+                    ->icon('heroicon-o-rocket-launch')
                     ->schema([
                         Forms\Components\TextInput::make('build_command')
                             ->label('Comando de build')
+                            ->prefixIcon('heroicon-o-wrench-screwdriver')
                             ->placeholder('npm run build')
-                            ->helperText('Comando executado antes do deploy (ex: npm run build, go build)'),
+                            ->helperText('Executado antes de iniciar a aplicação — compilações, bundling, migrações, etc.')
+                            ->hint('Deixe vazio se não houver etapa de build necessária')
+                            ->hintIcon('heroicon-o-information-circle'),
 
                         Forms\Components\TextInput::make('start_command')
                             ->label('Comando de inicialização')
+                            ->prefixIcon('heroicon-o-play')
                             ->placeholder('npm start')
-                            ->helperText('Comando que inicia sua aplicação (ex: npm start, python app.py)'),
+                            ->helperText('Comando que mantém a aplicação em execução contínua no container'),
 
                         Forms\Components\TextInput::make('port')
-                            ->label('Porta')
+                            ->label('Porta da aplicação')
                             ->numeric()
                             ->default(3000)
                             ->minValue(1)
                             ->maxValue(65535)
-                            ->helperText('Porta onde sua aplicação escuta (geralmente 3000, 8000 ou 8080)'),
+                            ->prefixIcon('heroicon-o-signal')
+                            ->suffix('TCP')
+                            ->helperText('Porta interna onde sua aplicação escuta conexões HTTP — exposta via Traefik')
+                            ->hint('Node.js: 3000 · Python/PHP: 8000 · Go/Java: 8080')
+                            ->hintIcon('heroicon-m-light-bulb'),
 
                         Forms\Components\Toggle::make('auto_deploy')
-                            ->label('Deploy automático')
-                            ->helperText('Fazer deploy automaticamente ao receber push no Git')
-                            ->default(true),
+                            ->label('Deploy automático via git push')
+                            ->helperText('Acionar deploy automaticamente ao detectar novo push no branch configurado')
+                            ->default(true)
+                            ->onIcon('heroicon-m-bolt')
+                            ->offIcon('heroicon-m-bolt-slash')
+                            ->onColor('success'),
                     ])
                     ->columns(2),
 
-                Forms\Components\Section::make('Recursos')
-                    ->description('Defina limites de CPU e memória')
+                Forms\Components\Section::make('Recursos computacionais')
+                    ->description('Defina limites de CPU, memória e réplicas — o sistema garante que a aplicação nunca exceda esses limites')
                     ->icon('heroicon-o-server-stack')
                     ->schema(array_merge(
                         static::resourcesSchema(auth()->user()),
                         [
                             Forms\Components\Toggle::make('auto_scale')
-                                ->label('Auto-scaling')
-                                ->helperText('Escalar automaticamente baseado na utilização de recursos'),
+                                ->label('Auto-scaling habilitado')
+                                ->helperText('Aumentar ou reduzir réplicas automaticamente com base na utilização de CPU e memória')
+                                ->onIcon('heroicon-m-arrow-trending-up')
+                                ->offIcon('heroicon-m-minus')
+                                ->onColor('warning'),
                         ]
                     ))
                     ->columns(2),
 
                 Forms\Components\Section::make('Auto-scaling')
-                    ->description('Configuração de escala automática')
+                    ->description('O sistema ajustará o número de réplicas automaticamente dentro deste intervalo conforme a carga')
                     ->icon('heroicon-o-arrow-trending-up')
                     ->schema([
                         Forms\Components\TextInput::make('min_replicas')
@@ -159,34 +196,42 @@ class ApplicationResource extends Resource
                             ->numeric()
                             ->default(1)
                             ->minValue(1)
-                            ->helperText('Número mínimo de containers sempre ativos'),
+                            ->prefixIcon('heroicon-o-arrow-down-circle')
+                            ->suffix('containers')
+                            ->helperText('Containers sempre ativos — garante disponibilidade mesmo com carga zero'),
 
                         Forms\Components\TextInput::make('max_replicas')
                             ->label('Máximo de réplicas')
                             ->numeric()
                             ->default(5)
                             ->minValue(1)
-                            ->helperText('Número máximo de containers permitido'),
+                            ->prefixIcon('heroicon-o-arrow-up-circle')
+                            ->suffix('containers')
+                            ->helperText('Teto de escalonamento — protege contra consumo excessivo de recursos do cluster'),
                     ])
                     ->columns(2)
                     ->visible(fn (Forms\Get $get) => $get('auto_scale')),
 
                 Forms\Components\Section::make('Health Check')
-                    ->description('Monitoramento de saúde da aplicação')
+                    ->description('Containers que falharem no health check são reiniciados automaticamente pelo orquestrador')
                     ->icon('heroicon-o-heart')
                     ->schema([
                         Forms\Components\TextInput::make('health_check.path')
-                            ->label('Caminho')
+                            ->label('Endpoint de health check')
                             ->default('/health')
+                            ->prefixIcon('heroicon-o-heart')
                             ->placeholder('/health')
-                            ->helperText('Endpoint HTTP para verificar se a aplicação está saudável'),
+                            ->helperText('Deve retornar HTTP 200 quando a aplicação estiver operacional')
+                            ->hint('Crie um endpoint simples que retorne HTTP 200 com { "ok": true }')
+                            ->hintIcon('heroicon-m-light-bulb'),
 
                         Forms\Components\TextInput::make('health_check.interval')
-                            ->label('Intervalo')
+                            ->label('Intervalo de verificação')
                             ->numeric()
                             ->default(30)
+                            ->prefixIcon('heroicon-o-clock')
                             ->suffix('segundos')
-                            ->helperText('Frequência das verificações de saúde'),
+                            ->helperText('Frequência com que o sistema verifica se a aplicação responde corretamente'),
                     ])
                     ->columns(2),
             ]);
@@ -200,12 +245,16 @@ class ApplicationResource extends Resource
 
         return [
             Forms\Components\TextInput::make('replicas')
-                ->label('Réplicas')
+                ->label('Réplicas iniciais')
                 ->numeric()
                 ->default(1)
                 ->minValue(1)
                 ->maxValue($limits['max_containers'])
-                ->helperText('Número de containers em execução (para balanceamento de carga). Limite do plano: ' . $limits['max_containers'])
+                ->prefixIcon('heroicon-o-server-stack')
+                ->suffix('containers')
+                ->helperText('Instâncias paralelas para balanceamento de carga. Limite do plano: ' . $limits['max_containers'] . ' containers')
+                ->hint('Cada réplica é um container independente no servidor worker')
+                ->hintIcon('heroicon-o-information-circle')
                 ->rules([
                     function () use ($owner) {
                         return function (string $attribute, mixed $value, \Closure $fail) use ($owner) {
@@ -228,17 +277,23 @@ class ApplicationResource extends Resource
                 ->default(1000)
                 ->minValue(100)
                 ->maxValue($limits['cpu_limit'])
-                ->suffix('millicores')
-                ->helperText('1000 millicores = 1 CPU core. Limite do plano: ' . $limits['cpu_limit'] . ' millicores'),
+                ->prefixIcon('heroicon-o-cpu-chip')
+                ->suffix('m')
+                ->helperText('Máximo de CPU por container. Plano atual: até ' . $limits['cpu_limit'] . 'm')
+                ->hint('250m = ¼ vCPU · 500m = ½ vCPU · 1000m = 1 vCPU completo')
+                ->hintIcon('heroicon-m-light-bulb'),
 
             Forms\Components\TextInput::make('memory_limit')
-                ->label('Limite de memória')
+                ->label('Limite de memória RAM')
                 ->numeric()
                 ->default(512)
                 ->minValue(64)
                 ->maxValue($limits['memory_limit'])
+                ->prefixIcon('heroicon-o-circle-stack')
                 ->suffix('MB')
-                ->helperText('Memória RAM máxima permitida. Limite do plano: ' . $limits['memory_limit'] . ' MB'),
+                ->helperText('Memória máxima por container. Plano atual: até ' . $limits['memory_limit'] . ' MB')
+                ->hint('Node/Python: 256–512 MB · Go/Rust: 128–256 MB · Java: 512+ MB')
+                ->hintIcon('heroicon-m-light-bulb'),
         ];
     }
 
