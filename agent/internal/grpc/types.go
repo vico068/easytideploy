@@ -88,6 +88,8 @@ type ContainerStats struct {
 	Pids           int64
 	Status         string
 	Health         string
+	RestartCount   int32
+	StartedAt      int64 // Unix timestamp
 }
 
 // HealthCheckRequest contains health check parameters
@@ -283,6 +285,7 @@ var AgentService_ServiceDesc = grpc.ServiceDesc{
 		{MethodName: "CheckHealth", Handler: _AgentService_CheckHealth_Handler},
 		// Orchestrator calls "GetServerStats" but agent interface uses "GetServerMetrics"
 		{MethodName: "GetServerStats", Handler: _AgentService_GetServerStats_Handler},
+		{MethodName: "GetContainerStats", Handler: _AgentService_GetContainerStats_Handler},
 		{MethodName: "PullImage", Handler: _AgentService_PullImage_Handler},
 	},
 	Streams: []grpc.StreamDesc{
@@ -396,6 +399,21 @@ func _AgentService_GetServerStats_Handler(srv interface{}, ctx context.Context, 
 	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/agent.AgentService/GetServerStats"}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AgentServiceServer).GetServerMetrics(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentService_GetContainerStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ContainerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentServiceServer).GetContainerStats(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{Server: srv, FullMethod: "/agent.AgentService/GetContainerStats"}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentServiceServer).GetContainerStats(ctx, req.(*ContainerRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

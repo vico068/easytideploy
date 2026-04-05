@@ -18,6 +18,7 @@ service AgentService {
   // Health & Stats
   rpc CheckHealth(HealthCheckRequest) returns (HealthCheckResponse);
   rpc GetServerStats(ServerStatsRequest) returns (ServerStatsResponse);
+  rpc GetContainerStats(ContainerStatsRequest) returns (ContainerStatsResponse);
 
   // Image management
   rpc PullImage(PullImageRequest) returns (PullImageResponse);
@@ -119,6 +120,27 @@ message ServerStatsResponse {
   int64 disk_usage = 4;
   int64 disk_total = 5;
   int32 container_count = 6;
+}
+
+message ContainerStatsRequest {
+  string container_id = 1;
+}
+
+message ContainerStatsResponse {
+  string container_id = 1;
+  string status = 2;
+  string health = 3;
+  double cpu_percent = 4;
+  int64 memory_usage = 5;
+  int64 memory_limit = 6;
+  double memory_percent = 7;
+  int64 network_rx_bytes = 8;
+  int64 network_tx_bytes = 9;
+  int64 block_read = 10;
+  int64 block_write = 11;
+  int64 pids = 12;
+  int32 restart_count = 13;
+  int64 started_at = 14;  // Unix timestamp
 }
 
 // Image Messages

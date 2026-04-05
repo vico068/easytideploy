@@ -268,6 +268,8 @@ func (s *agentService) GetContainerStats(ctx context.Context, req *ContainerRequ
 		Pids:           stats.PIDs,
 		Status:         stats.Status,
 		Health:         stats.Health,
+		RestartCount:   int32(stats.RestartCount),
+		StartedAt:      stats.StartedAt.Unix(),
 	}, nil
 }
 

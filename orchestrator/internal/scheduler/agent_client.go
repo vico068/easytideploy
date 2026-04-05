@@ -190,3 +190,18 @@ func (c *AgentClient) GetServerStats(ctx context.Context) (*proto.ServerStatsRes
 
 	return response, nil
 }
+
+// GetContainerStats retrieves container statistics from the agent
+func (c *AgentClient) GetContainerStats(ctx context.Context, containerID string) (*proto.ContainerStatsResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	response, err := c.client.GetContainerStats(ctx, &proto.ContainerStatsRequest{
+		ContainerId: containerID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get container stats: %w", err)
+	}
+
+	return response, nil
+}

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Application;
 use App\Models\Container;
+use App\Models\HttpMetric;
 use App\Models\ResourceUsage;
 
 class MetricsService
@@ -70,6 +71,30 @@ class MetricsService
                 'rx' => $metrics->total_network_rx ?? 0,
                 'tx' => $metrics->total_network_tx ?? 0,
             ],
+        ];
+    }
+
+    public function getHttpMetrics(Application $application, string $period = '1h'): array
+    {
+        $metrics = HttpMetric::where('application_id', $application->id)
+            ->forPeriod($period)
+            ->selectRaw('
+                SUM(requests_2xx) as total_2xx,
+                SUM(requests_3xx) as total_3xx,
+                SUM(requests_4xx) as total_4xx,
+                SUM(requests_5xx) as total_5xx,
+                SUM(total_requests) as total_requests,
+                AVG(avg_latency_ms) as avg_latency
+            ')
+            ->first();
+
+        return [
+            '2xx' => $metrics->total_2xx ?? 0,
+            '3xx' => $metrics->total_3xx ?? 0,
+            '4xx' => $metrics->total_4xx ?? 0,
+            '5xx' => $metrics->total_5xx ?? 0,
+            'total' => $metrics->total_requests ?? 0,
+            'avg_latency_ms' => round($metrics->avg_latency ?? 0, 2),
         ];
     }
 }
