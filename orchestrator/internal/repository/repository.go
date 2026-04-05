@@ -127,7 +127,7 @@ func (r *Repository) GetApplication(ctx context.Context, id string) (*Applicatio
 	query := `
 		SELECT id, user_id, name, slug, COALESCE(git_repository, ''), COALESCE(git_branch, 'main'), COALESCE(git_token, ''), COALESCE(root_directory, '/'),
 		       type, COALESCE(runtime_version, ''), COALESCE(build_command, ''), COALESCE(start_command, ''), port, replicas, cpu_limit, memory_limit,
-		       COALESCE(health_check_path, '/health'), health_check_interval, auto_deploy, ssl_enabled, status,
+		       COALESCE(health_check_path, '/'), health_check_interval, auto_deploy, ssl_enabled, status,
 		       traefik_config_updated_at, created_at, updated_at
 		FROM applications
 		WHERE id = $1
@@ -152,7 +152,7 @@ func (r *Repository) GetApplicationBySlug(ctx context.Context, slug string) (*Ap
 	query := `
 		SELECT id, user_id, name, slug, COALESCE(git_repository, ''), COALESCE(git_branch, 'main'), COALESCE(git_token, ''), COALESCE(root_directory, '/'),
 		       type, COALESCE(runtime_version, ''), COALESCE(build_command, ''), COALESCE(start_command, ''), port, replicas, cpu_limit, memory_limit,
-		       COALESCE(health_check_path, '/health'), health_check_interval, auto_deploy, ssl_enabled, status,
+		       COALESCE(health_check_path, '/'), health_check_interval, auto_deploy, ssl_enabled, status,
 		       traefik_config_updated_at, created_at, updated_at
 		FROM applications
 		WHERE slug = $1
@@ -177,7 +177,7 @@ func (r *Repository) ListApplications(ctx context.Context, userID string) ([]*Ap
 	query := `
 		SELECT id, user_id, name, slug, COALESCE(git_repository, ''), COALESCE(git_branch, 'main'), COALESCE(git_token, ''), COALESCE(root_directory, '/'),
 		       type, COALESCE(runtime_version, ''), COALESCE(build_command, ''), COALESCE(start_command, ''), port, replicas, cpu_limit, memory_limit,
-		       COALESCE(health_check_path, '/health'), health_check_interval, auto_deploy, ssl_enabled, status,
+		       COALESCE(health_check_path, '/'), health_check_interval, auto_deploy, ssl_enabled, status,
 		       traefik_config_updated_at, created_at, updated_at
 		FROM applications
 		WHERE user_id = $1
