@@ -224,46 +224,34 @@ func (s *Scheduler) saveContainerMetrics(container DatabaseContainer, stats inte
 	// Type assert to ContainerStatsResponse
 	st, ok := stats.(*proto.ContainerStatsResponse)
 	if !ok {
-		log.Warn().Str("container_id", container.ID).Msg("container stats wrong type, skipping")
 		return nil // Skip if wrong type
 	}
 
-	memoryMB := float64(st.MemoryUsage) / (1024 * 1024)
-
-	query := fmt.Sprintf(`
+	query := `
 		INSERT INTO resource_usages (
 			id, container_id, application_id, server_id,
 			cpu_percent, memory_percent, memory_usage,
 			network_rx, network_tx, disk_read, disk_write,
 			recorded_at, created_at, updated_at
 		)
-		VALUES ('%s', '%s', '%s', '%s',
-			%f, %f, %f,
-			%d, %d, %d, %d,
-			NOW(), NOW(), NOW())
-	`,
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW(), NOW())
+	`
+
+	_, err := s.db.Pool().Exec(
+		context.Background(),
+		query,
 		uuid.New().String(),
 		container.ID,
 		container.ApplicationID,
 		container.ServerID,
 		st.CpuPercent,
 		st.MemoryPercent,
-		memoryMB,
+		float64(st.MemoryUsage)/(1024*1024), // bytes to MB
 		st.NetworkRxBytes,
 		st.NetworkTxBytes,
 		st.BlockRead,
 		st.BlockWrite,
 	)
-
-	log.Debug().
-		Str("container_id", container.ID).
-		Float64("cpu", st.CpuPercent).
-		Float64("mem_pct", st.MemoryPercent).
-		Float64("mem_mb", memoryMB).
-		Str("full_query", query).
-		Msg("saving container metrics")
-
-	_, err := s.db.Pool().Exec(context.Background(), query)
 
 	return err
 }
