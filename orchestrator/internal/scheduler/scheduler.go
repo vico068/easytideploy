@@ -415,6 +415,9 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 		return err
 	}
 
+	// Cleanup containers from previous deployments before creating new ones
+	s.cleanupOldContainers(ctx, job.ApplicationID, job.DeploymentID, logger)
+
 	replicas := job.Replicas
 	if replicas <= 0 {
 		replicas = 1
