@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\UserPlan;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -19,6 +20,7 @@ class User extends Authenticatable implements FilamentUser
         'email',
         'password',
         'is_admin',
+        'plan',
     ];
 
     protected $hidden = [
@@ -32,6 +34,7 @@ class User extends Authenticatable implements FilamentUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'plan' => UserPlan::class,
         ];
     }
 
@@ -61,5 +64,34 @@ class User extends Authenticatable implements FilamentUser
     public function getTotalContainersAttribute(): int
     {
         return $this->applications()->withCount('containers')->get()->sum('containers_count');
+    }
+
+    public function getPlanLimits(): array
+    {
+        $planKey = $this->plan instanceof UserPlan ? $this->plan->value : ($this->plan ?? 'starter');
+
+        return config('easydeploy.plans.' . $planKey, config('easydeploy.plans.starter'));
+    }
+
+    public function getApplicationsCountAttribute(): int
+    {
+        return $this->applications()->count();
+    }
+
+    public function canCreateApplication(): bool
+    {
+        $max = $this->getPlanLimits()['max_applications'];
+
+        return $this->applications_count < $max;
+    }
+
+    public function canScaleTo(int $desiredReplicas, ?int $excludeAppId = null): bool
+    {
+        $max = $this->getPlanLimits()['max_containers'];
+        $current = $this->applications()
+            ->when($excludeAppId, fn ($q) => $q->where('id', '!=', $excludeAppId))
+            ->sum('replicas');
+
+        return ($current + $desiredReplicas) <= $max;
     }
 }

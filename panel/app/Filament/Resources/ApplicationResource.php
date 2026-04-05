@@ -7,6 +7,7 @@ use App\Enums\ApplicationType;
 use App\Filament\Resources\ApplicationResource\Pages;
 use App\Filament\Resources\ApplicationResource\RelationManagers;
 use App\Models\Application;
+use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -139,33 +140,14 @@ class ApplicationResource extends Resource
                 Forms\Components\Section::make('Recursos')
                     ->description('Defina limites de CPU e memória')
                     ->icon('heroicon-o-server-stack')
-                    ->schema([
-                        Forms\Components\TextInput::make('replicas')
-                            ->label('Réplicas')
-                            ->numeric()
-                            ->default(1)
-                            ->minValue(1)
-                            ->maxValue(10)
-                            ->helperText('Número de containers em execução (para balanceamento de carga)'),
-
-                        Forms\Components\TextInput::make('cpu_limit')
-                            ->label('Limite de CPU')
-                            ->numeric()
-                            ->default(1000)
-                            ->suffix('millicores')
-                            ->helperText('1000 millicores = 1 CPU core completo'),
-
-                        Forms\Components\TextInput::make('memory_limit')
-                            ->label('Limite de memória')
-                            ->numeric()
-                            ->default(512)
-                            ->suffix('MB')
-                            ->helperText('Memória RAM máxima permitida'),
-
-                        Forms\Components\Toggle::make('auto_scale')
-                            ->label('Auto-scaling')
-                            ->helperText('Escalar automaticamente baseado na utilização de recursos'),
-                    ])
+                    ->schema(array_merge(
+                        static::resourcesSchema(auth()->user()),
+                        [
+                            Forms\Components\Toggle::make('auto_scale')
+                                ->label('Auto-scaling')
+                                ->helperText('Escalar automaticamente baseado na utilização de recursos'),
+                        ]
+                    ))
                     ->columns(2),
 
                 Forms\Components\Section::make('Auto-scaling')
@@ -208,6 +190,56 @@ class ApplicationResource extends Resource
                     ])
                     ->columns(2),
             ]);
+    }
+
+    public static function resourcesSchema(?User $owner = null): array
+    {
+        $limits = $owner
+            ? $owner->getPlanLimits()
+            : config('easydeploy.plans.enterprise');
+
+        return [
+            Forms\Components\TextInput::make('replicas')
+                ->label('Réplicas')
+                ->numeric()
+                ->default(1)
+                ->minValue(1)
+                ->maxValue($limits['max_containers'])
+                ->helperText('Número de containers em execução (para balanceamento de carga). Limite do plano: ' . $limits['max_containers'])
+                ->rules([
+                    function () use ($owner) {
+                        return function (string $attribute, mixed $value, \Closure $fail) use ($owner) {
+                            if (! $owner) {
+                                return;
+                            }
+                            $record = request()->route('record');
+                            $excludeId = $record instanceof Application ? $record->getKey() : null;
+                            if (! $owner->canScaleTo((int) $value, $excludeId)) {
+                                $limits = $owner->getPlanLimits();
+                                $fail("Limite de containers do plano atingido ({$limits['max_containers']} no total).");
+                            }
+                        };
+                    },
+                ]),
+
+            Forms\Components\TextInput::make('cpu_limit')
+                ->label('Limite de CPU')
+                ->numeric()
+                ->default(1000)
+                ->minValue(100)
+                ->maxValue($limits['cpu_limit'])
+                ->suffix('millicores')
+                ->helperText('1000 millicores = 1 CPU core. Limite do plano: ' . $limits['cpu_limit'] . ' millicores'),
+
+            Forms\Components\TextInput::make('memory_limit')
+                ->label('Limite de memória')
+                ->numeric()
+                ->default(512)
+                ->minValue(64)
+                ->maxValue($limits['memory_limit'])
+                ->suffix('MB')
+                ->helperText('Memória RAM máxima permitida. Limite do plano: ' . $limits['memory_limit'] . ' MB'),
+        ];
     }
 
     public static function table(Table $table): Table

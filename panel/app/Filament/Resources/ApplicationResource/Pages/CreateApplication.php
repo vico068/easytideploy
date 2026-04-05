@@ -8,6 +8,7 @@ use App\Models\Domain;
 use Filament\Forms;
 use Filament\Forms\Components\Wizard;
 use Filament\Forms\Form;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Str;
 
@@ -119,42 +120,23 @@ class CreateApplication extends CreateRecord
                     Wizard\Step::make('Recursos')
                         ->description('Limites de CPU, memória e réplicas')
                         ->icon('heroicon-o-server-stack')
-                        ->schema([
-                            Forms\Components\TextInput::make('replicas')
-                                ->label('Réplicas')
-                                ->numeric()
-                                ->default(1)
-                                ->minValue(1)
-                                ->maxValue(10)
-                                ->helperText('Número de containers em execução (para balanceamento de carga)'),
+                        ->schema(array_merge(
+                            ApplicationResource::resourcesSchema(auth()->user()),
+                            [
+                                Forms\Components\TextInput::make('health_check.path')
+                                    ->label('Caminho do Health Check')
+                                    ->default('/health')
+                                    ->placeholder('/health')
+                                    ->helperText('Endpoint HTTP para verificar se a aplicação está saudável'),
 
-                            Forms\Components\TextInput::make('cpu_limit')
-                                ->label('Limite de CPU')
-                                ->numeric()
-                                ->default(1000)
-                                ->suffix('millicores')
-                                ->helperText('1000 millicores = 1 CPU core completo'),
-
-                            Forms\Components\TextInput::make('memory_limit')
-                                ->label('Limite de memória')
-                                ->numeric()
-                                ->default(512)
-                                ->suffix('MB')
-                                ->helperText('Memória RAM máxima permitida'),
-
-                            Forms\Components\TextInput::make('health_check.path')
-                                ->label('Caminho do Health Check')
-                                ->default('/health')
-                                ->placeholder('/health')
-                                ->helperText('Endpoint HTTP para verificar se a aplicação está saudável'),
-
-                            Forms\Components\TextInput::make('health_check.interval')
-                                ->label('Intervalo do Health Check')
-                                ->numeric()
-                                ->default(30)
-                                ->suffix('segundos')
-                                ->helperText('Frequência das verificações de saúde'),
-                        ])
+                                Forms\Components\TextInput::make('health_check.interval')
+                                    ->label('Intervalo do Health Check')
+                                    ->numeric()
+                                    ->default(30)
+                                    ->suffix('segundos')
+                                    ->helperText('Frequência das verificações de saúde'),
+                            ]
+                        ))
                         ->columns(2),
                 ])
                     ->skippable()
@@ -164,7 +146,21 @@ class CreateApplication extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['user_id'] = auth()->id();
+        $user = auth()->user();
+
+        if (! $user->is_admin && ! $user->canCreateApplication()) {
+            $limits = $user->getPlanLimits();
+
+            Notification::make()
+                ->title('Limite do plano atingido')
+                ->body("Seu plano {$user->plan->getLabel()} permite no máximo {$limits['max_applications']} aplicações.")
+                ->danger()
+                ->send();
+
+            $this->halt();
+        }
+
+        $data['user_id'] = $user->id;
 
         return $data;
     }
