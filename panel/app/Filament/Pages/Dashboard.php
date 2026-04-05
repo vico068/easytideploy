@@ -121,7 +121,7 @@ class Dashboard extends FilamentDashboard
         );
     }
 
-    protected function getWidgets(): array
+    public function getWidgets(): array
     {
         return [];
     }
