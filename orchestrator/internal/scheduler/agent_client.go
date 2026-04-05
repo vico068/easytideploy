@@ -76,6 +76,10 @@ func (c *AgentClient) CreateContainer(ctx context.Context, req *DeployRequest) (
 		return nil, fmt.Errorf("failed to create container: %w", err)
 	}
 
+	if !response.Success {
+		return nil, fmt.Errorf("agent failed to create container: %s", response.Error)
+	}
+
 	return &CreateContainerResult{
 		ContainerID: response.ContainerId,
 		HostPort:    response.HostPort,
