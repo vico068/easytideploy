@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -165,28 +167,35 @@ func (s *Scheduler) handleBuildJob(data []byte) {
 	if err := s.updateDeploymentStatus(ctx, job.DeploymentID, StatusBuilding, ""); err != nil {
 		logger.Error().Err(err).Msg("Failed to update deployment status")
 	}
-	go s.notifyPanel(job.CallbackURL, StatusBuilding, "", "")
+	go s.notifyPanel(job.CallbackURL, StatusBuilding, "", "", "", "")
 
 	// Execute build pipeline
 	result, err := s.executeBuildPipeline(ctx, &job, &logger)
 	if err != nil {
 		logger.Error().Err(err).Msg("Build pipeline failed")
 		s.updateDeploymentStatus(ctx, job.DeploymentID, StatusFailed, err.Error())
-		go s.notifyPanel(job.CallbackURL, StatusFailed, err.Error(), "")
+		go s.notifyPanel(job.CallbackURL, StatusFailed, err.Error(), "", "", "")
 		return
+	}
+
+	// Save commit info to deployment
+	if result.CommitSHA != "" || result.CommitMsg != "" {
+		if err := s.saveCommitInfo(ctx, job.DeploymentID, result.CommitSHA, result.CommitMsg); err != nil {
+			logger.Error().Err(err).Msg("Failed to save commit info")
+		}
 	}
 
 	// Deploy containers
 	if err := s.deployContainers(ctx, &job, result, &logger); err != nil {
 		logger.Error().Err(err).Msg("Deployment failed")
 		s.updateDeploymentStatus(ctx, job.DeploymentID, StatusFailed, err.Error())
-		go s.notifyPanel(job.CallbackURL, StatusFailed, err.Error(), result.BuildLogs)
+		go s.notifyPanel(job.CallbackURL, StatusFailed, err.Error(), result.BuildLogs, result.CommitSHA, result.CommitMsg)
 		return
 	}
 
 	logger.Info().Msg("Build job completed successfully")
 	s.updateDeploymentStatus(ctx, job.DeploymentID, StatusRunning, "")
-	go s.notifyPanel(job.CallbackURL, StatusRunning, "", result.BuildLogs)
+	go s.notifyPanel(job.CallbackURL, StatusRunning, "", result.BuildLogs, result.CommitSHA, result.CommitMsg)
 }
 
 // BuildResult contains the result of a build
@@ -234,13 +243,24 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 		result.CommitMsg = commitInfo.Message
 	}
 
+	// Apply root directory if specified
+	buildPath := repoPath
+	if job.RootDirectory != "" && job.RootDirectory != "/" {
+		subDir := strings.TrimPrefix(job.RootDirectory, "/")
+		buildPath = filepath.Join(repoPath, subDir)
+		if _, err := os.Stat(buildPath); os.IsNotExist(err) {
+			return nil, fmt.Errorf("root_directory %q does not exist in repository", job.RootDirectory)
+		}
+		logger.Info().Str("root_directory", job.RootDirectory).Msg("Using subdirectory as build root")
+	}
+
 	// Step 2: Detect app type if not specified
 	appType := job.Type
 	appVersion := ""
 
 	if appType == "" || appType == "auto" {
 		logger.Info().Msg("Detecting application type")
-		detection, err := buildpack.Detect(repoPath)
+		detection, err := buildpack.Detect(buildPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to detect app type: %w", err)
 		}
@@ -310,7 +330,7 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 	if appType == "docker" {
 		// Use custom Dockerfile
 		buildOpts := docker.BuildOptions{
-			ContextPath: repoPath,
+			ContextPath: buildPath,
 			Dockerfile:  "Dockerfile",
 			ImageName:   imageName,
 			ImageTag:    imageTag,
@@ -333,7 +353,7 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 			ctx,
 			appType,
 			appVersion,
-			repoPath,
+			buildPath,
 			imageName,
 			imageTag,
 			buildEnv,
@@ -429,6 +449,9 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 			Msg("Container created")
 	}
 
+	// Cleanup old containers from previous deployments
+	s.cleanupOldContainers(ctx, job.ApplicationID, job.DeploymentID, logger)
+
 	// Update Traefik configuration
 	if err := s.updateTraefikConfig(ctx, job.ApplicationID); err != nil {
 		logger.Warn().Err(err).Msg("Failed to update Traefik config")
@@ -447,7 +470,17 @@ func (s *Scheduler) updateDeploymentStatus(ctx context.Context, deploymentID str
 	return err
 }
 
-func (s *Scheduler) notifyPanel(callbackURL string, status DeploymentStatus, errorMsg string, buildLogs string) {
+func (s *Scheduler) saveCommitInfo(ctx context.Context, deploymentID string, commitSHA string, commitMessage string) error {
+	query := `
+		UPDATE deployments
+		SET commit_sha = $1, commit_message = $2, updated_at = NOW()
+		WHERE id = $3
+	`
+	_, err := s.db.Pool().Exec(ctx, query, commitSHA, commitMessage, deploymentID)
+	return err
+}
+
+func (s *Scheduler) notifyPanel(callbackURL string, status DeploymentStatus, errorMsg string, buildLogs string, commitSHA string, commitMsg string) {
 	if callbackURL == "" {
 		return
 	}
@@ -460,6 +493,12 @@ func (s *Scheduler) notifyPanel(callbackURL string, status DeploymentStatus, err
 	}
 	if buildLogs != "" {
 		payload["build_logs"] = buildLogs
+	}
+	if commitSHA != "" {
+		payload["commit_sha"] = commitSHA
+	}
+	if commitMsg != "" {
+		payload["commit_message"] = commitMsg
 	}
 
 	data, err := json.Marshal(payload)
@@ -499,6 +538,74 @@ func (s *Scheduler) saveContainer(ctx context.Context, deploymentID, appID, serv
 	name := fmt.Sprintf("%s-replica-%d", appID, replica)
 	_, err := s.db.Pool().Exec(ctx, query, deploymentID, appID, serverID, containerID, name, hostPort, internalPort, replica)
 	return err
+}
+
+// cleanupOldContainers stops and removes containers from previous deployments of the same application
+func (s *Scheduler) cleanupOldContainers(ctx context.Context, applicationID, currentDeploymentID string, logger *zerolog.Logger) {
+	// Find old containers from previous deployments
+	query := `
+		SELECT c.id, c.docker_container_id, c.server_id, s.agent_address
+		FROM containers c
+		JOIN servers s ON c.server_id = s.id
+		WHERE c.application_id = $1
+		  AND c.deployment_id != $2
+		  AND c.status = 'running'
+	`
+
+	rows, err := s.db.Pool().Query(ctx, query, applicationID, currentDeploymentID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to query old containers for cleanup")
+		return
+	}
+	defer rows.Close()
+
+	type oldContainer struct {
+		ID           string
+		DockerID     string
+		ServerID     string
+		AgentAddress string
+	}
+
+	var oldContainers []oldContainer
+	for rows.Next() {
+		var c oldContainer
+		if err := rows.Scan(&c.ID, &c.DockerID, &c.ServerID, &c.AgentAddress); err != nil {
+			logger.Error().Err(err).Msg("Failed to scan old container row")
+			continue
+		}
+		oldContainers = append(oldContainers, c)
+	}
+
+	if len(oldContainers) == 0 {
+		return
+	}
+
+	logger.Info().Int("count", len(oldContainers)).Msg("Cleaning up old containers from previous deployments")
+
+	for _, c := range oldContainers {
+		// Stop and remove via agent
+		client, err := s.getAgentClient(c.ServerID, c.AgentAddress)
+		if err != nil {
+			logger.Warn().Err(err).Str("container", c.ID).Msg("Failed to get agent client for cleanup")
+			continue
+		}
+
+		if err := client.StopContainer(ctx, c.DockerID); err != nil {
+			logger.Warn().Err(err).Str("container", c.DockerID).Msg("Failed to stop old container")
+		}
+
+		if err := client.RemoveContainer(ctx, c.DockerID); err != nil {
+			logger.Warn().Err(err).Str("container", c.DockerID).Msg("Failed to remove old container")
+		}
+
+		// Update DB status
+		updateQuery := `UPDATE containers SET status = 'stopped', updated_at = NOW() WHERE id = $1`
+		if _, err := s.db.Pool().Exec(ctx, updateQuery, c.ID); err != nil {
+			logger.Warn().Err(err).Str("container", c.ID).Msg("Failed to update old container status")
+		}
+
+		logger.Info().Str("container_id", c.DockerID).Str("db_id", c.ID).Msg("Old container cleaned up")
+	}
 }
 
 func (s *Scheduler) updateTraefikConfig(ctx context.Context, applicationID string) error {

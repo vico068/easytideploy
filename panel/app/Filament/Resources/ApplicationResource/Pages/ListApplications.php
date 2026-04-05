@@ -12,7 +12,9 @@ class ListApplications extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
-            \Filament\Actions\CreateAction::make(),
+            \Filament\Actions\CreateAction::make()
+                ->label('Nova Aplicação')
+                ->icon('heroicon-o-plus'),
         ];
     }
 }

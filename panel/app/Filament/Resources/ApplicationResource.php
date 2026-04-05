@@ -49,7 +49,7 @@ class ApplicationResource extends Resource
                             ->required()
                             ->unique(ignoreRecord: true)
                             ->prefix('https://')
-                            ->suffix('.easyti.cloud')
+                            ->suffix('.apps.easyti.cloud')
                             ->maxLength(255)
                             ->helperText('URL onde sua aplicação será acessada'),
 
@@ -215,16 +215,13 @@ class ApplicationResource extends Resource
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('name')
-                    ->label('Nome')
+                    ->label('Aplicação')
                     ->searchable()
                     ->sortable()
-                    ->weight('medium')
-                    ->description(fn (Application $record) => $record->slug),
-
-                Tables\Columns\TextColumn::make('type')
-                    ->label('Tipo')
-                    ->badge()
-                    ->sortable(),
+                    ->weight('bold')
+                    ->icon(fn (Application $record) => $record->type?->getIcon())
+                    ->iconColor(fn (Application $record) => $record->type?->getColor())
+                    ->description(fn (Application $record) => $record->slug . '.' . config('easydeploy.domain.default_suffix')),
 
                 Tables\Columns\TextColumn::make('status')
                     ->label('Status')
@@ -245,21 +242,21 @@ class ApplicationResource extends Resource
                     ->openUrlInNewTab()
                     ->placeholder(fn ($record) => $record->default_domain ?? '-')
                     ->icon('heroicon-m-globe-alt')
+                    ->iconColor('primary')
                     ->copyable()
                     ->copyMessage('Domínio copiado!')
-                    ->limit(40),
+                    ->limit(35),
 
                 Tables\Columns\TextColumn::make('latestDeployment.status')
-                    ->label('Último deploy')
+                    ->label('Último Deploy')
                     ->badge()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('updated_at')
                     ->label('Atualizado')
-                    ->dateTime('d/m/Y H:i')
                     ->sortable()
                     ->since()
-                    ->description(fn ($record) => $record->updated_at->diffForHumans())
+                    ->tooltip(fn ($record) => $record->updated_at?->format('d/m/Y H:i:s'))
                     ->toggleable(),
             ])
             ->filters([
@@ -284,22 +281,31 @@ class ApplicationResource extends Resource
                     ->modalIcon('heroicon-o-rocket-launch')
                     ->action(fn (Application $record) => static::triggerDeploy($record)),
 
-                Tables\Actions\Action::make('logs')
-                    ->label('Logs')
-                    ->icon('heroicon-o-document-text')
-                    ->color('info')
-                    ->url(fn (Application $record) => static::getUrl('logs', ['record' => $record])),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('logs')
+                        ->label('Logs')
+                        ->icon('heroicon-o-document-text')
+                        ->color('info')
+                        ->url(fn (Application $record) => static::getUrl('logs', ['record' => $record])),
 
-                Tables\Actions\Action::make('monitor')
-                    ->label('Monitorar')
-                    ->icon('heroicon-o-chart-bar')
-                    ->color('primary')
-                    ->url(fn (Application $record) => route('filament.admin.pages.monitoring-dashboard', ['app' => $record->id])),
+                    Tables\Actions\Action::make('monitor')
+                        ->label('Monitorar')
+                        ->icon('heroicon-o-chart-bar')
+                        ->color('primary')
+                        ->url(fn (Application $record) => route('filament.admin.pages.monitoring-dashboard', ['app' => $record->id])),
 
-                Tables\Actions\EditAction::make()
-                    ->color('warning'),
+                    Tables\Actions\EditAction::make()
+                        ->label('Editar')
+                        ->icon('heroicon-o-pencil-square')
+                        ->color('warning'),
 
-                Tables\Actions\DeleteAction::make(),
+                    Tables\Actions\DeleteAction::make()
+                        ->label('Excluir'),
+                ])
+                    ->label('Ações')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->color('gray')
+                    ->tooltip('Mais ações'),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

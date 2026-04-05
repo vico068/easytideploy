@@ -148,7 +148,9 @@ class Application extends Model
 
     public function getDefaultDomainAttribute(): string
     {
-        return sprintf('%s.easyti.cloud', $this->slug);
+        $suffix = config('easydeploy.domain.default_suffix', 'apps.easyti.cloud');
+
+        return sprintf('%s.%s', $this->slug, $suffix);
     }
 
     public function getWebhookUrlAttribute(): string

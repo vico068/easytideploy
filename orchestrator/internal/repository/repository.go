@@ -16,6 +16,7 @@ type Application struct {
 	Slug                   string
 	GitRepository          string
 	GitBranch              string
+	RootDirectory          string
 	Type                   string
 	RuntimeVersion         string
 	BuildCommand           string
@@ -123,8 +124,8 @@ func NewRepository(db *database.DB) *Repository {
 // GetApplication retrieves an application by ID
 func (r *Repository) GetApplication(ctx context.Context, id string) (*Application, error) {
 	query := `
-		SELECT id, user_id, name, slug, git_repository, git_branch, type, runtime_version,
-		       build_command, start_command, port, replicas, cpu_limit, memory_limit,
+		SELECT id, user_id, name, slug, git_repository, git_branch, COALESCE(root_directory, '/'),
+		       type, runtime_version, build_command, start_command, port, replicas, cpu_limit, memory_limit,
 		       health_check_path, health_check_interval, auto_deploy, ssl_enabled, status,
 		       traefik_config_updated_at, created_at, updated_at
 		FROM applications
@@ -134,8 +135,8 @@ func (r *Repository) GetApplication(ctx context.Context, id string) (*Applicatio
 	var app Application
 	err := r.db.Pool().QueryRow(ctx, query, id).Scan(
 		&app.ID, &app.UserID, &app.Name, &app.Slug, &app.GitRepository, &app.GitBranch,
-		&app.Type, &app.RuntimeVersion, &app.BuildCommand, &app.StartCommand, &app.Port,
-		&app.Replicas, &app.CPULimit, &app.MemoryLimit, &app.HealthCheckPath,
+		&app.RootDirectory, &app.Type, &app.RuntimeVersion, &app.BuildCommand, &app.StartCommand,
+		&app.Port, &app.Replicas, &app.CPULimit, &app.MemoryLimit, &app.HealthCheckPath,
 		&app.HealthCheckInterval, &app.AutoDeploy, &app.SSLEnabled, &app.Status,
 		&app.TraefikConfigUpdatedAt, &app.CreatedAt, &app.UpdatedAt,
 	)
@@ -148,8 +149,8 @@ func (r *Repository) GetApplication(ctx context.Context, id string) (*Applicatio
 // GetApplicationBySlug retrieves an application by slug
 func (r *Repository) GetApplicationBySlug(ctx context.Context, slug string) (*Application, error) {
 	query := `
-		SELECT id, user_id, name, slug, git_repository, git_branch, type, runtime_version,
-		       build_command, start_command, port, replicas, cpu_limit, memory_limit,
+		SELECT id, user_id, name, slug, git_repository, git_branch, COALESCE(root_directory, '/'),
+		       type, runtime_version, build_command, start_command, port, replicas, cpu_limit, memory_limit,
 		       health_check_path, health_check_interval, auto_deploy, ssl_enabled, status,
 		       traefik_config_updated_at, created_at, updated_at
 		FROM applications
@@ -159,8 +160,8 @@ func (r *Repository) GetApplicationBySlug(ctx context.Context, slug string) (*Ap
 	var app Application
 	err := r.db.Pool().QueryRow(ctx, query, slug).Scan(
 		&app.ID, &app.UserID, &app.Name, &app.Slug, &app.GitRepository, &app.GitBranch,
-		&app.Type, &app.RuntimeVersion, &app.BuildCommand, &app.StartCommand, &app.Port,
-		&app.Replicas, &app.CPULimit, &app.MemoryLimit, &app.HealthCheckPath,
+		&app.RootDirectory, &app.Type, &app.RuntimeVersion, &app.BuildCommand, &app.StartCommand,
+		&app.Port, &app.Replicas, &app.CPULimit, &app.MemoryLimit, &app.HealthCheckPath,
 		&app.HealthCheckInterval, &app.AutoDeploy, &app.SSLEnabled, &app.Status,
 		&app.TraefikConfigUpdatedAt, &app.CreatedAt, &app.UpdatedAt,
 	)
@@ -173,8 +174,8 @@ func (r *Repository) GetApplicationBySlug(ctx context.Context, slug string) (*Ap
 // ListApplications retrieves all applications for a user
 func (r *Repository) ListApplications(ctx context.Context, userID string) ([]*Application, error) {
 	query := `
-		SELECT id, user_id, name, slug, git_repository, git_branch, type, runtime_version,
-		       build_command, start_command, port, replicas, cpu_limit, memory_limit,
+		SELECT id, user_id, name, slug, git_repository, git_branch, COALESCE(root_directory, '/'),
+		       type, runtime_version, build_command, start_command, port, replicas, cpu_limit, memory_limit,
 		       health_check_path, health_check_interval, auto_deploy, ssl_enabled, status,
 		       traefik_config_updated_at, created_at, updated_at
 		FROM applications
@@ -193,8 +194,8 @@ func (r *Repository) ListApplications(ctx context.Context, userID string) ([]*Ap
 		var app Application
 		if err := rows.Scan(
 			&app.ID, &app.UserID, &app.Name, &app.Slug, &app.GitRepository, &app.GitBranch,
-			&app.Type, &app.RuntimeVersion, &app.BuildCommand, &app.StartCommand, &app.Port,
-			&app.Replicas, &app.CPULimit, &app.MemoryLimit, &app.HealthCheckPath,
+			&app.RootDirectory, &app.Type, &app.RuntimeVersion, &app.BuildCommand, &app.StartCommand,
+			&app.Port, &app.Replicas, &app.CPULimit, &app.MemoryLimit, &app.HealthCheckPath,
 			&app.HealthCheckInterval, &app.AutoDeploy, &app.SSLEnabled, &app.Status,
 			&app.TraefikConfigUpdatedAt, &app.CreatedAt, &app.UpdatedAt,
 		); err != nil {

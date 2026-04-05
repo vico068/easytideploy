@@ -22,7 +22,7 @@ enum ApplicationType: string implements HasLabel, HasColor, HasIcon
             self::PHP => 'PHP',
             self::Golang => 'Go',
             self::Python => 'Python',
-            self::Static => 'Static Site',
+            self::Static => 'Site Estático',
             self::Docker => 'Docker',
         };
     }

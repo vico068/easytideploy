@@ -22,6 +22,7 @@ type BuildJob struct {
 	Type          string            `json:"type"`
 	BuildCommand  string            `json:"build_command"`
 	StartCommand  string            `json:"start_command"`
+	RootDirectory string            `json:"root_directory,omitempty"`
 	Port          int               `json:"port"`
 	Replicas      int               `json:"replicas"`
 	CPULimit      int               `json:"cpu_limit"`

@@ -109,7 +109,7 @@ return [
     */
 
     'domain' => [
-        'default_suffix' => env('DEFAULT_DOMAIN_SUFFIX', 'easyti.cloud'),
+        'default_suffix' => env('DEFAULT_DOMAIN_SUFFIX', 'apps.easyti.cloud'),
         'ssl_enabled' => true,
         'ssl_provider' => 'letsencrypt',
     ],

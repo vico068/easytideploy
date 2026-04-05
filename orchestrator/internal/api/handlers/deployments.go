@@ -37,6 +37,7 @@ type CreateDeploymentRequest struct {
 	Type          string            `json:"type"`
 	BuildCommand  string            `json:"build_command"`
 	StartCommand  string            `json:"start_command"`
+	RootDirectory string            `json:"root_directory,omitempty"`
 	Port          int               `json:"port"`
 	Replicas      int               `json:"replicas"`
 	CPULimit      int               `json:"cpu_limit"`
@@ -162,6 +163,7 @@ func (h *DeploymentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Type:          req.Type,
 		BuildCommand:  req.BuildCommand,
 		StartCommand:  req.StartCommand,
+		RootDirectory: req.RootDirectory,
 		Port:          req.Port,
 		Replicas:      req.Replicas,
 		CPULimit:      req.CPULimit,
@@ -257,6 +259,14 @@ func (h *DeploymentHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 func (h *DeploymentHandler) Retry(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
+	// Parse optional request body for git_token and callback_url
+	var retryReq struct {
+		GitToken    string `json:"git_token,omitempty"`
+		CallbackURL string `json:"callback_url,omitempty"`
+	}
+	// Ignore decode errors - body is optional
+	json.NewDecoder(r.Body).Decode(&retryReq)
+
 	deployment, err := h.repo.GetDeployment(r.Context(), id)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "deployment not found")
@@ -298,14 +308,17 @@ func (h *DeploymentHandler) Retry(w http.ResponseWriter, r *http.Request) {
 		GitRepository: app.GitRepository,
 		GitBranch:     app.GitBranch,
 		CommitSHA:     deployment.CommitSha,
+		GitToken:      retryReq.GitToken,
 		Type:          app.Type,
 		BuildCommand:  app.BuildCommand,
 		StartCommand:  app.StartCommand,
+		RootDirectory: app.RootDirectory,
 		Port:          app.Port,
 		Replicas:      app.Replicas,
 		CPULimit:      app.CPULimit,
 		MemoryLimit:   app.MemoryLimit,
 		Environment:   envVars,
+		CallbackURL:   retryReq.CallbackURL,
 	}
 
 	if err := h.queue.Enqueue("builds", job); err != nil {

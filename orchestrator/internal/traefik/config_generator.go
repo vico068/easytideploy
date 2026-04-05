@@ -172,7 +172,16 @@ func (g *ConfigGenerator) GenerateConfig(ctx context.Context, applicationID stri
 	config := g.buildConfig(app, domains, containers)
 
 	// Write configuration file
-	return g.writeConfig(applicationID, config)
+	if err := g.writeConfig(applicationID, config); err != nil {
+		return err
+	}
+
+	// Update SSL status for domains configured with TLS
+	if app.SSLEnabled {
+		g.updateDomainSSLStatus(ctx, applicationID)
+	}
+
+	return nil
 }
 
 // Application represents an application from the database
@@ -368,7 +377,7 @@ func (g *ConfigGenerator) buildConfig(app *Application, domains []*Domain, conta
 	// If no domains, create router with slug-based subdomain
 	if len(domains) == 0 {
 		routerName := fmt.Sprintf("rt-%s-default", app.Slug)
-		rule := fmt.Sprintf("Host(`%s.app.easyti.cloud`)", app.Slug)
+		rule := fmt.Sprintf("Host(`%s.apps.easyti.cloud`)", app.Slug)
 
 		config.HTTP.Routers[routerName] = &Router{
 			Rule:        rule,
@@ -427,6 +436,18 @@ func (g *ConfigGenerator) RemoveConfig(applicationID string) error {
 
 	log.Info().Str("file", filename).Msg("Traefik configuration removed")
 	return nil
+}
+
+// updateDomainSSLStatus marks domains as active when Traefik config with TLS is generated
+func (g *ConfigGenerator) updateDomainSSLStatus(ctx context.Context, applicationID string) {
+	query := `
+		UPDATE domains
+		SET ssl_status = 'active', ssl_enabled = true
+		WHERE application_id = $1 AND verified = true AND ssl_status != 'active'
+	`
+	if _, err := g.db.Pool().Exec(ctx, query, applicationID); err != nil {
+		log.Error().Err(err).Str("app", applicationID).Msg("Failed to update domain SSL status")
+	}
 }
 
 // RefreshAllConfigs regenerates configurations for all active applications

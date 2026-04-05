@@ -33,6 +33,7 @@ class OrchestratorClient
             'type' => $app->type->value,
             'build_command' => $app->build_command,
             'start_command' => $app->start_command,
+            'root_directory' => $app->root_directory ?? '/',
             'port' => $app->port,
             'replicas' => $app->replicas,
             'cpu_limit' => $app->cpu_limit,

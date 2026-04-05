@@ -30,10 +30,22 @@ Route::post('/internal/deployments/{deployment}/status', function ($deployment, 
 
     $status = $request->input('status');
     $buildLogs = $request->input('build_logs');
+    $commitSha = $request->input('commit_sha');
+    $commitMessage = $request->input('commit_message');
 
-    // Update build logs
+    // Update build logs and commit info
+    $updateData = [];
     if ($buildLogs) {
-        $deployment->update(['build_logs' => $buildLogs]);
+        $updateData['build_logs'] = $buildLogs;
+    }
+    if ($commitSha) {
+        $updateData['commit_sha'] = $commitSha;
+    }
+    if ($commitMessage) {
+        $updateData['commit_message'] = $commitMessage;
+    }
+    if (! empty($updateData)) {
+        $deployment->update($updateData);
     }
 
     // Handle status transitions
