@@ -39,12 +39,13 @@ class ServerMetricsChart extends ChartWidget
             default => now()->subHour(),
         };
 
-        $interval = match ($this->filter) {
-            '1h' => '5 minutes',
-            '6h' => '30 minutes',
-            '24h' => '1 hour',
-            '7d' => '6 hours',
-            default => '5 minutes',
+        // Bucket size in seconds
+        $bucketSeconds = match ($this->filter) {
+            '1h' => 300,    // 5 minutes
+            '6h' => 1800,   // 30 minutes
+            '24h' => 3600,  // 1 hour
+            '7d' => 21600,  // 6 hours
+            default => 300,
         };
 
         $servers = Server::where('status', 'online')->get();
@@ -55,12 +56,11 @@ class ServerMetricsChart extends ChartWidget
 
         foreach ($servers as $index => $server) {
             $data = ResourceUsage::where('recorded_at', '>=', $since)
-                ->whereHas('container', function ($q) use ($server) {
-                    $q->where('server_id', $server->id);
-                })
+                ->where('server_id', $server->id)
+                ->whereNull('container_id')
                 ->select([
-                    DB::raw("date_trunc('{$interval}', recorded_at) as period"),
-                    DB::raw('AVG(cpu_usage) as avg_cpu'),
+                    DB::raw("to_timestamp(floor(extract(epoch from recorded_at) / {$bucketSeconds}) * {$bucketSeconds}) as period"),
+                    DB::raw('AVG(cpu_percent) as avg_cpu'),
                 ])
                 ->groupBy('period')
                 ->orderBy('period')

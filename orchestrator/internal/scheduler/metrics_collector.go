@@ -1,9 +1,14 @@
 package scheduler
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
 	"time"
 
+	"github.com/easyti/easydeploy/orchestrator/internal/metrics"
 	"github.com/easyti/easydeploy/orchestrator/pkg/proto"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -108,6 +113,18 @@ func (s *Scheduler) collectServerAndContainerMetrics() {
 		Int("servers", len(servers)).
 		Int("metrics_saved", metricsCount).
 		Msg("collected metrics")
+
+	// 8. Scrape Traefik HTTP metrics
+	if s.traefikScraper != nil {
+		httpMetrics, err := s.traefikScraper.Scrape(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to scrape traefik metrics")
+		} else if len(httpMetrics.Applications) > 0 {
+			if err := s.saveHTTPMetrics(ctx, httpMetrics); err != nil {
+				log.Error().Err(err).Msg("failed to save HTTP metrics")
+			}
+		}
+	}
 }
 
 // getOnlineServers retrieves all online servers from the database
@@ -236,4 +253,113 @@ func (s *Scheduler) saveContainerMetrics(container DatabaseContainer, stats inte
 	)
 
 	return err
+}
+
+// httpMetricPayload represents a single HTTP metric for the panel callback
+type httpMetricPayload struct {
+	ApplicationID string `json:"application_id"`
+	Requests2xx   int64  `json:"requests_2xx"`
+	Requests3xx   int64  `json:"requests_3xx"`
+	Requests4xx   int64  `json:"requests_4xx"`
+	Requests5xx   int64  `json:"requests_5xx"`
+	TotalRequests int64  `json:"total_requests"`
+}
+
+// httpMetricsBatchPayload is the batch sent to the panel
+type httpMetricsBatchPayload struct {
+	Timestamp   string              `json:"timestamp"`
+	HTTPMetrics []httpMetricPayload `json:"http_metrics"`
+}
+
+// saveHTTPMetrics maps app slugs to IDs and sends HTTP metrics to the panel
+func (s *Scheduler) saveHTTPMetrics(ctx context.Context, traefikMetrics *metrics.TraefikMetrics) error {
+	// 1. Collect all slugs and map to application IDs
+	slugs := make([]string, 0, len(traefikMetrics.Applications))
+	for slug := range traefikMetrics.Applications {
+		slugs = append(slugs, slug)
+	}
+
+	slugToID := make(map[string]string)
+	for _, slug := range slugs {
+		var appID string
+		err := s.db.Pool().QueryRow(ctx, "SELECT id FROM applications WHERE slug = $1", slug).Scan(&appID)
+		if err != nil {
+			log.Warn().Str("slug", slug).Err(err).Msg("application not found for slug")
+			continue
+		}
+		slugToID[slug] = appID
+	}
+
+	if len(slugToID) == 0 {
+		return nil
+	}
+
+	// 2. Build payload
+	payload := httpMetricsBatchPayload{
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+
+	for slug, metric := range traefikMetrics.Applications {
+		appID, ok := slugToID[slug]
+		if !ok {
+			continue
+		}
+		payload.HTTPMetrics = append(payload.HTTPMetrics, httpMetricPayload{
+			ApplicationID: appID,
+			Requests2xx:   metric.Requests2xx,
+			Requests3xx:   metric.Requests3xx,
+			Requests4xx:   metric.Requests4xx,
+			Requests5xx:   metric.Requests5xx,
+			TotalRequests: metric.TotalRequests,
+		})
+	}
+
+	if len(payload.HTTPMetrics) == 0 {
+		return nil
+	}
+
+	// 3. Send to panel
+	if err := s.sendToPanelAPI("/api/internal/metrics/batch", payload); err != nil {
+		return fmt.Errorf("send to panel: %w", err)
+	}
+
+	log.Info().
+		Int("applications", len(payload.HTTPMetrics)).
+		Msg("sent HTTP metrics to panel")
+
+	return nil
+}
+
+// sendToPanelAPI sends a JSON payload to the panel API
+func (s *Scheduler) sendToPanelAPI(path string, payload interface{}) error {
+	panelURL := s.cfg.PanelURL
+	if panelURL == "" {
+		return fmt.Errorf("PANEL_URL not configured")
+	}
+
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, panelURL+path, bytes.NewReader(jsonData))
+	if err != nil {
+		return fmt.Errorf("create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+s.cfg.APIKey)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("panel returned status %d", resp.StatusCode)
+	}
+
+	return nil
 }

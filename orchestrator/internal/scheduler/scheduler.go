@@ -14,6 +14,7 @@ import (
 	"github.com/easyti/easydeploy/orchestrator/internal/database"
 	"github.com/easyti/easydeploy/orchestrator/internal/docker"
 	"github.com/easyti/easydeploy/orchestrator/internal/git"
+	"github.com/easyti/easydeploy/orchestrator/internal/metrics"
 	"github.com/easyti/easydeploy/orchestrator/internal/queue"
 	"github.com/easyti/easydeploy/orchestrator/internal/traefik"
 	"github.com/easyti/easydeploy/orchestrator/pkg/buildpack"
@@ -35,17 +36,18 @@ const (
 
 // Scheduler manages build jobs and container health
 type Scheduler struct {
-	db           *database.DB
-	queue        *queue.RedisQueue
-	cfg          *config.Config
-	gitCloner    *git.Cloner
-	imageBuilder *docker.ImageBuilder
-	agentClients map[string]*AgentClient
-	traefikGen   *traefik.ConfigGenerator
-	mu           sync.RWMutex
-	healthTicker *time.Ticker
-	stopCh       chan struct{}
-	wg           sync.WaitGroup
+	db              *database.DB
+	queue           *queue.RedisQueue
+	cfg             *config.Config
+	gitCloner       *git.Cloner
+	imageBuilder    *docker.ImageBuilder
+	agentClients    map[string]*AgentClient
+	traefikGen      *traefik.ConfigGenerator
+	traefikScraper  *metrics.TraefikScraper
+	mu              sync.RWMutex
+	healthTicker    *time.Ticker
+	stopCh          chan struct{}
+	wg              sync.WaitGroup
 }
 
 // SetTraefikGenerator sets the Traefik config generator (called after initialization)
@@ -65,13 +67,14 @@ func New(db *database.DB, q *queue.RedisQueue, cfg *config.Config) (*Scheduler, 
 	}
 
 	return &Scheduler{
-		db:           db,
-		queue:        q,
-		cfg:          cfg,
-		gitCloner:    gitCloner,
-		imageBuilder: imageBuilder,
-		agentClients: make(map[string]*AgentClient),
-		stopCh:       make(chan struct{}),
+		db:             db,
+		queue:          q,
+		cfg:            cfg,
+		gitCloner:      gitCloner,
+		imageBuilder:   imageBuilder,
+		agentClients:   make(map[string]*AgentClient),
+		traefikScraper: metrics.NewTraefikScraper(cfg.TraefikAPIURL),
+		stopCh:         make(chan struct{}),
 	}, nil
 }
 

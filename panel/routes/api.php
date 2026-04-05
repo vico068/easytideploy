@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\WebhookController;
+use App\Models\HttpMetric;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -46,6 +47,42 @@ Route::post('/internal/deployments/{deployment}/status', function ($deployment, 
     }
 
     return response()->json(['success' => true]);
+});
+
+// HTTP metrics batch callback - receives Traefik metrics from orchestrator
+Route::post('/internal/metrics/batch', function (\Illuminate\Http\Request $request) {
+    $apiKey = $request->bearerToken();
+    if (! $apiKey || ! hash_equals(config('easydeploy.orchestrator_api_key') ?? '', $apiKey)) {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+
+    $validated = $request->validate([
+        'timestamp' => 'required|date',
+        'http_metrics' => 'required|array',
+        'http_metrics.*.application_id' => 'required|uuid|exists:applications,id',
+        'http_metrics.*.requests_2xx' => 'integer|min:0',
+        'http_metrics.*.requests_3xx' => 'integer|min:0',
+        'http_metrics.*.requests_4xx' => 'integer|min:0',
+        'http_metrics.*.requests_5xx' => 'integer|min:0',
+        'http_metrics.*.total_requests' => 'integer|min:0',
+    ]);
+
+    $recordedAt = $validated['timestamp'];
+
+    foreach ($validated['http_metrics'] as $metric) {
+        HttpMetric::create([
+            'application_id' => $metric['application_id'],
+            'requests_2xx' => $metric['requests_2xx'] ?? 0,
+            'requests_3xx' => $metric['requests_3xx'] ?? 0,
+            'requests_4xx' => $metric['requests_4xx'] ?? 0,
+            'requests_5xx' => $metric['requests_5xx'] ?? 0,
+            'total_requests' => $metric['total_requests'] ?? 0,
+            'avg_latency_ms' => 0,
+            'recorded_at' => $recordedAt,
+        ]);
+    }
+
+    return response()->json(['success' => true, 'count' => count($validated['http_metrics'])]);
 });
 
 Route::prefix('internal')->middleware('auth:sanctum')->group(function () {

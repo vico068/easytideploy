@@ -67,4 +67,25 @@ class MonitoringDashboard extends Page
             \App\Filament\Widgets\MonitoringStatsWidget::class,
         ];
     }
+
+    protected function getFooterWidgets(): array
+    {
+        return [
+            \App\Filament\Widgets\ResourceUsageChart::class,
+            \App\Filament\Widgets\RequestsChart::class,
+            \App\Filament\Widgets\StatusCodesChart::class,
+            \App\Filament\Widgets\ServerMetricsChart::class,
+            \App\Filament\Widgets\RecentDeploymentsWidget::class,
+        ];
+    }
+
+    protected function getHeaderWidgetsColumns(): int|string|array
+    {
+        return 1;
+    }
+
+    protected function getFooterWidgetsColumns(): int|string|array
+    {
+        return 2;
+    }
 }

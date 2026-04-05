@@ -4,9 +4,12 @@ namespace App\Filament\Widgets;
 
 use App\Models\Container;
 use App\Models\Deployment;
+use App\Models\HttpMetric;
+use App\Models\ResourceUsage;
 use App\Models\Server;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
+use Illuminate\Support\Facades\DB;
 
 class MonitoringStatsWidget extends BaseWidget
 {
@@ -25,10 +28,9 @@ class MonitoringStatsWidget extends BaseWidget
         $avgMemory = Server::where('status', 'online')->avg('memory_used') ?? 0;
         $runningContainers = Container::where('status', 'running')->count();
         $unhealthyContainers = Container::where('health_status', 'unhealthy')->count();
-        $failedToday = Deployment::whereDate('created_at', today())->where('status', 'failed')->count();
         $successToday = Deployment::whereDate('created_at', today())->where('status', 'running')->count();
 
-        // Dados históricos dos últimos 7 dias para mini charts
+        // Dados históricos dos últimos 7 dias para mini charts (servidores)
         $serversHistoric = [];
         for ($i = 6; $i >= 0; $i--) {
             $date = now()->subDays($i);
@@ -37,14 +39,48 @@ class MonitoringStatsWidget extends BaseWidget
                 ->count();
         }
 
-        $cpuHistoric = [];
-        $memoryHistoric = [];
-        for ($i = 6; $i >= 0; $i--) {
-            // Em produção, isso deveria vir de uma tabela de métricas históricas
-            // Por ora, vamos usar valores simulados baseados na média atual
-            $cpuHistoric[] = max(0, min(100, $avgCpu + rand(-10, 10)));
-            $memoryHistoric[] = max(0, min(100, $avgMemory + rand(-10, 10)));
-        }
+        // Dados reais de CPU e memória (últimos 7 pontos de 10 min)
+        $cpuHistoric = ResourceUsage::whereNotNull('server_id')
+            ->where('recorded_at', '>', now()->subHour())
+            ->select([
+                DB::raw('to_timestamp(floor(extract(epoch from recorded_at) / 600) * 600) as period'),
+                DB::raw('AVG(cpu_percent) as avg_val'),
+            ])
+            ->groupBy('period')
+            ->orderBy('period')
+            ->limit(7)
+            ->pluck('avg_val')
+            ->map(fn ($v) => round((float) $v, 1))
+            ->toArray();
+
+        $memoryHistoric = ResourceUsage::whereNotNull('server_id')
+            ->where('recorded_at', '>', now()->subHour())
+            ->select([
+                DB::raw('to_timestamp(floor(extract(epoch from recorded_at) / 600) * 600) as period'),
+                DB::raw('AVG(memory_percent) as avg_val'),
+            ])
+            ->groupBy('period')
+            ->orderBy('period')
+            ->limit(7)
+            ->pluck('avg_val')
+            ->map(fn ($v) => round((float) $v, 1))
+            ->toArray();
+
+        // Total de requisições HTTP na última hora
+        $totalRequests = HttpMetric::where('recorded_at', '>=', now()->subHour())
+            ->sum('total_requests');
+
+        $requestsHistoric = HttpMetric::where('recorded_at', '>=', now()->subHour())
+            ->select([
+                DB::raw('to_timestamp(floor(extract(epoch from recorded_at) / 600) * 600) as period'),
+                DB::raw('SUM(total_requests) as total'),
+            ])
+            ->groupBy('period')
+            ->orderBy('period')
+            ->limit(7)
+            ->pluck('total')
+            ->map(fn ($v) => (int) $v)
+            ->toArray();
 
         return [
             Stat::make('Servidores Online', $onlineServers.'/'.$totalServers)
@@ -70,15 +106,16 @@ class MonitoringStatsWidget extends BaseWidget
                 ->descriptionIcon($unhealthyContainers > 0 ? 'heroicon-m-exclamation-triangle' : 'heroicon-m-heart')
                 ->color($unhealthyContainers > 0 ? 'warning' : 'success'),
 
+            Stat::make('Requisições HTTP', number_format($totalRequests))
+                ->description('Última hora')
+                ->descriptionIcon('heroicon-m-globe-alt')
+                ->color('info')
+                ->chart($requestsHistoric),
+
             Stat::make('Deploys com Sucesso', $successToday)
                 ->description('Hoje')
                 ->descriptionIcon('heroicon-m-check-circle')
                 ->color('success'),
-
-            Stat::make('Deploys Falharam', $failedToday)
-                ->description('Hoje')
-                ->descriptionIcon($failedToday > 0 ? 'heroicon-m-x-circle' : 'heroicon-m-check-circle')
-                ->color($failedToday > 0 ? 'danger' : 'success'),
         ];
     }
 }

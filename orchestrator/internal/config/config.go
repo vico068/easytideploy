@@ -33,6 +33,9 @@ type Config struct {
 	MaxRetries   int
 	DataDir      string
 
+	// Panel
+	PanelURL string
+
 	// Health checks
 	HealthCheckInterval      int // seconds
 	HealthCheckFailThreshold int // consecutive failures before marking unhealthy
@@ -59,6 +62,7 @@ func Load() (*Config, error) {
 		BuildTimeout:             getEnvInt("BUILD_TIMEOUT", 600),
 		MaxRetries:               getEnvInt("MAX_RETRIES", 3),
 		DataDir:                  getEnv("DATA_DIR", "/var/lib/easydeploy"),
+		PanelURL:                 getEnv("PANEL_URL", "http://panel:8000"),
 		HealthCheckInterval:      getEnvInt("HEALTH_CHECK_INTERVAL", 30),
 		HealthCheckFailThreshold: getEnvInt("HEALTH_CHECK_FAIL_THRESHOLD", 3),
 		FailoverThreshold:        getEnvInt("FAILOVER_THRESHOLD", 5),

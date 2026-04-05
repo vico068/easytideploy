@@ -4,12 +4,14 @@ namespace App\Jobs;
 
 use App\Models\ApplicationLog;
 use App\Models\Deployment;
+use App\Models\HttpMetric;
 use App\Models\ResourceUsage;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
 
 class CleanupOldDeploymentsJob implements ShouldQueue
 {
@@ -27,7 +29,7 @@ class CleanupOldDeploymentsJob implements ShouldQueue
         // Delete old logs (older than 7 days)
         $this->cleanupLogs();
 
-        // Delete old metrics (older than 30 days)
+        // Delete old metrics (older than 7 days)
         $this->cleanupMetrics();
     }
 
@@ -57,6 +59,16 @@ class CleanupOldDeploymentsJob implements ShouldQueue
 
     private function cleanupMetrics(): void
     {
-        ResourceUsage::where('recorded_at', '<', now()->subDays(30))->delete();
+        $retentionDays = config('easydeploy.metrics.retention_days', 7);
+        $cutoff = now()->subDays($retentionDays);
+
+        $deletedResourceUsages = ResourceUsage::where('recorded_at', '<', $cutoff)->delete();
+        $deletedHttpMetrics = HttpMetric::where('recorded_at', '<', $cutoff)->delete();
+
+        Log::info('Cleaned old metrics', [
+            'resource_usages_deleted' => $deletedResourceUsages,
+            'http_metrics_deleted' => $deletedHttpMetrics,
+            'retention_days' => $retentionDays,
+        ]);
     }
 }

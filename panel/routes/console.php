@@ -13,3 +13,9 @@ Schedule::job(new \App\Jobs\CollectMetricsJob())
     ->everyMinute()
     ->name('collect-metrics')
     ->withoutOverlapping();
+
+// Cleanup old deployments, logs, and metrics daily at 3 AM
+Schedule::job(new \App\Jobs\CleanupOldDeploymentsJob())
+    ->dailyAt('03:00')
+    ->name('cleanup-old-data')
+    ->withoutOverlapping();
