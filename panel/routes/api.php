@@ -25,7 +25,7 @@ Route::get('/internal/applications/{id}', function ($id, \Illuminate\Http\Reques
         return response()->json(['error' => 'Unauthorized'], 401);
     }
 
-    $app = \App\Models\Application::findOrFail($id);
+    $app = \App\Models\Application::withTrashed()->findOrFail($id);
     $envVars = $app->getEnvironmentArray();
 
     return response()->json([
