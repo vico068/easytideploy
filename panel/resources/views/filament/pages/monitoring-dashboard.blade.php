@@ -221,7 +221,7 @@
             </div>
 
             @if(count($httpChartData['labels']) > 0)
-                <div class="h-56" id="httpChartContainer"><canvas></canvas></div>
+                <div class="h-56" id="httpChartContainer" wire:ignore><canvas></canvas></div>
             @else
                 <div class="h-56 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700">
                     <x-heroicon-o-globe-alt class="w-10 h-10 mb-2 opacity-30" />
@@ -258,7 +258,7 @@
             </div>
 
             @if(isset($resourceChartData['labels']) && count($resourceChartData['labels']) > 0)
-                <div class="h-56" id="resourceChartContainer"><canvas></canvas></div>
+                <div class="h-56" id="resourceChartContainer" wire:ignore><canvas></canvas></div>
             @else
                 <div class="h-56 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700">
                     <x-heroicon-o-chart-bar class="w-10 h-10 mb-2 opacity-30" />
