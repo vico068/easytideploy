@@ -21,6 +21,7 @@ class ActiveAlertsWidget extends BaseWidget
         return $table
             ->query(
                 Alert::query()
+                    ->forUser(auth()->id())
                     ->firing()
                     ->orderByDesc('starts_at')
                     ->limit(20)

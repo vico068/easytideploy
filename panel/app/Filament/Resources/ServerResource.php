@@ -25,6 +25,22 @@ class ServerResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Servidores';
 
+    /**
+     * Apenas administradores podem ver este recurso na navegação.
+     */
+    public static function shouldRegisterNavigation(): bool
+    {
+        return auth()->user()?->isAdmin() ?? false;
+    }
+
+    /**
+     * Apenas administradores podem acessar este recurso.
+     */
+    public static function canAccess(): bool
+    {
+        return auth()->user()?->isAdmin() ?? false;
+    }
+
     public static function form(Form $form): Form
     {
         return $form

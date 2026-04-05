@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Alert extends Model
 {
@@ -15,6 +16,7 @@ class Alert extends Model
 
     protected $fillable = [
         'id',
+        'application_id',
         'type',
         'severity',
         'title',
@@ -61,5 +63,32 @@ class Alert extends Model
     public function scopeType($query, string $type)
     {
         return $query->where('type', $type);
+    }
+
+    /**
+     * Relação com a aplicação
+     */
+    public function application(): BelongsTo
+    {
+        return $this->belongsTo(Application::class);
+    }
+
+    /**
+     * Scope para alertas do usuário (via aplicações)
+     */
+    public function scopeForUser($query, string $userId)
+    {
+        return $query->where(function ($q) use ($userId) {
+            $q->whereHas('application', fn($app) => $app->where('user_id', $userId))
+              ->orWhereNull('application_id');
+        });
+    }
+
+    /**
+     * Scope para alertas de uma aplicação específica
+     */
+    public function scopeForApplication($query, string $appId)
+    {
+        return $query->where('application_id', $appId);
     }
 }

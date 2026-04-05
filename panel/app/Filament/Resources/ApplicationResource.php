@@ -290,6 +290,12 @@ class ApplicationResource extends Resource
                     ->color('info')
                     ->url(fn (Application $record) => static::getUrl('logs', ['record' => $record])),
 
+                Tables\Actions\Action::make('monitor')
+                    ->label('Monitorar')
+                    ->icon('heroicon-o-chart-bar')
+                    ->color('primary')
+                    ->url(fn (Application $record) => route('filament.admin.pages.monitoring-dashboard', ['app' => $record->id])),
+
                 Tables\Actions\EditAction::make()
                     ->color('warning'),
 

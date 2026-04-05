@@ -13,6 +13,12 @@ class StatsOverview extends BaseWidget
 {
     protected static ?int $sort = 1;
 
+    /**
+     * Deprecado: Usar UserStatsWidget em vez disso.
+     * Este widget mostra dados globais, não filtrados por usuário.
+     */
+    protected static bool $isDiscovered = false;
+
     protected function getStats(): array
     {
         // Contadores atuais

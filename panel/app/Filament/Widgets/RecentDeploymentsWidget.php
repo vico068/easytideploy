@@ -21,6 +21,7 @@ class RecentDeploymentsWidget extends BaseWidget
         return $table
             ->query(
                 Deployment::query()
+                    ->whereHas('application', fn ($q) => $q->where('user_id', auth()->id()))
                     ->with(['application'])
                     ->latest()
                     ->limit(10)
