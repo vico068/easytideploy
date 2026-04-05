@@ -128,26 +128,13 @@
         </x-filament-panels::form>
 
         {{-- Relation managers --}}
-        @if($this->hasCombinedRelationManagerTabsWithContent())
-            <x-filament-panels::resources.relation-managers
-                :active-locale="isset($activeLocale) ? $activeLocale : null"
-                :active-manager="$this->activeRelationManager ?? null"
-                :content-tab-label="$this->getContentTabLabel() ?? null"
-                :managers="$this->getRelationManagers()"
-                :owner-record="$record"
-                :page-class="static::class"
-            />
-        @else
-            {{ $this->content }}
-
-            <x-filament-panels::resources.relation-managers
-                :active-locale="isset($activeLocale) ? $activeLocale : null"
-                :active-manager="$this->activeRelationManager ?? null"
-                :managers="$this->getRelationManagers()"
-                :owner-record="$record"
-                :page-class="static::class"
-            />
-        @endif
+        <x-filament-panels::resources.relation-managers
+            :active-locale="isset($activeLocale) ? $activeLocale : null"
+            :active-manager="$this->activeRelationManager ?? null"
+            :managers="$this->getRelationManagers()"
+            :owner-record="$record"
+            :page-class="static::class"
+        />
 
     </div>
 </x-filament-panels::page>
