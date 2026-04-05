@@ -229,26 +229,19 @@ func (s *Scheduler) saveContainerMetrics(container DatabaseContainer, stats inte
 	}
 
 	memoryMB := float64(st.MemoryUsage) / (1024 * 1024)
-	log.Debug().
-		Str("container_id", container.ID).
-		Float64("cpu", st.CpuPercent).
-		Float64("mem_pct", st.MemoryPercent).
-		Float64("mem_mb", memoryMB).
-		Msg("saving container metrics")
 
-	query := `
+	query := fmt.Sprintf(`
 		INSERT INTO resource_usages (
 			id, container_id, application_id, server_id,
 			cpu_percent, memory_percent, memory_usage,
 			network_rx, network_tx, disk_read, disk_write,
 			recorded_at, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW(), NOW())
-	`
-
-	_, err := s.db.Pool().Exec(
-		context.Background(),
-		query,
+		VALUES ('%s', '%s', '%s', '%s',
+			%f, %f, %f,
+			%d, %d, %d, %d,
+			NOW(), NOW(), NOW())
+	`,
 		uuid.New().String(),
 		container.ID,
 		container.ApplicationID,
@@ -261,6 +254,16 @@ func (s *Scheduler) saveContainerMetrics(container DatabaseContainer, stats inte
 		st.BlockRead,
 		st.BlockWrite,
 	)
+
+	log.Debug().
+		Str("container_id", container.ID).
+		Float64("cpu", st.CpuPercent).
+		Float64("mem_pct", st.MemoryPercent).
+		Float64("mem_mb", memoryMB).
+		Str("query_preview", query[:200]).
+		Msg("saving container metrics")
+
+	_, err := s.db.Pool().Exec(context.Background(), query)
 
 	return err
 }
