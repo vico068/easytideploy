@@ -24,10 +24,14 @@
         'class' => 'bg-gray-900 rounded-lg p-4 font-mono text-sm overflow-auto shadow-lg border border-gray-800'
     ]) }}
     style="max-height: {{ $maxHeight }};"
+    role="log"
+    aria-label="Log viewer"
+    aria-live="polite"
     @if($autoScroll)
         x-data="{ scrollToBottom: true }"
         x-effect="if(scrollToBottom) $el.scrollTop = $el.scrollHeight"
     @endif
+    tabindex="0"
 >
     @forelse($logs as $log)
         {{-- Se é um objeto de log estruturado (com propriedades) --}}

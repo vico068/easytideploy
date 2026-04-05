@@ -14,6 +14,8 @@ class ResourceUsageChart extends ChartWidget
 
     protected int|string|array $columnSpan = 'full';
 
+    protected static bool $isLazy = true;
+
     public ?string $filter = '1h';
 
     protected function getFilters(): ?array

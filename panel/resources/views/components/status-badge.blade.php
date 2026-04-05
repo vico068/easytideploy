@@ -61,7 +61,10 @@
 
 <span {{ $attributes->merge([
     'class' => "inline-flex items-center gap-x-1.5 rounded-full font-medium ring-1 ring-inset {$sizeClasses} {$colorClasses}"
-]) }}>
+]) }}
+    role="status"
+    aria-label="{{ $displayLabel }} status"
+>
     @if($dot)
         {{-- Dot indicator --}}
         <svg class="{{ $iconSize }}" viewBox="0 0 6 6" aria-hidden="true">
@@ -69,8 +72,8 @@
         </svg>
     @elseif($displayIcon)
         {{-- Ícone --}}
-        @svg($displayIcon, $iconSize)
+        @svg($displayIcon, $iconSize . ' flex-shrink-0', ['aria-hidden' => 'true'])
     @endif
 
-    {{ $displayLabel }}
+    <span class="truncate">{{ $displayLabel }}</span>
 </span>
