@@ -268,6 +268,7 @@ func (h *ApplicationHandler) Deploy(w http.ResponseWriter, r *http.Request) {
 		Type:          app.Type,
 		BuildCommand:  app.BuildCommand,
 		StartCommand:  app.StartCommand,
+		RootDirectory: app.RootDirectory,
 		Port:          app.Port,
 		Replicas:      app.Replicas,
 		CPULimit:      app.CPULimit,

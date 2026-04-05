@@ -124,9 +124,9 @@ func NewRepository(db *database.DB) *Repository {
 // GetApplication retrieves an application by ID
 func (r *Repository) GetApplication(ctx context.Context, id string) (*Application, error) {
 	query := `
-		SELECT id, user_id, name, slug, git_repository, git_branch, COALESCE(root_directory, '/'),
-		       type, runtime_version, build_command, start_command, port, replicas, cpu_limit, memory_limit,
-		       health_check_path, health_check_interval, auto_deploy, ssl_enabled, status,
+		SELECT id, user_id, name, slug, COALESCE(git_repository, ''), COALESCE(git_branch, 'main'), COALESCE(root_directory, '/'),
+		       type, COALESCE(runtime_version, ''), COALESCE(build_command, ''), COALESCE(start_command, ''), port, replicas, cpu_limit, memory_limit,
+		       COALESCE(health_check_path, '/health'), health_check_interval, auto_deploy, ssl_enabled, status,
 		       traefik_config_updated_at, created_at, updated_at
 		FROM applications
 		WHERE id = $1
@@ -149,9 +149,9 @@ func (r *Repository) GetApplication(ctx context.Context, id string) (*Applicatio
 // GetApplicationBySlug retrieves an application by slug
 func (r *Repository) GetApplicationBySlug(ctx context.Context, slug string) (*Application, error) {
 	query := `
-		SELECT id, user_id, name, slug, git_repository, git_branch, COALESCE(root_directory, '/'),
-		       type, runtime_version, build_command, start_command, port, replicas, cpu_limit, memory_limit,
-		       health_check_path, health_check_interval, auto_deploy, ssl_enabled, status,
+		SELECT id, user_id, name, slug, COALESCE(git_repository, ''), COALESCE(git_branch, 'main'), COALESCE(root_directory, '/'),
+		       type, COALESCE(runtime_version, ''), COALESCE(build_command, ''), COALESCE(start_command, ''), port, replicas, cpu_limit, memory_limit,
+		       COALESCE(health_check_path, '/health'), health_check_interval, auto_deploy, ssl_enabled, status,
 		       traefik_config_updated_at, created_at, updated_at
 		FROM applications
 		WHERE slug = $1
@@ -174,9 +174,9 @@ func (r *Repository) GetApplicationBySlug(ctx context.Context, slug string) (*Ap
 // ListApplications retrieves all applications for a user
 func (r *Repository) ListApplications(ctx context.Context, userID string) ([]*Application, error) {
 	query := `
-		SELECT id, user_id, name, slug, git_repository, git_branch, COALESCE(root_directory, '/'),
-		       type, runtime_version, build_command, start_command, port, replicas, cpu_limit, memory_limit,
-		       health_check_path, health_check_interval, auto_deploy, ssl_enabled, status,
+		SELECT id, user_id, name, slug, COALESCE(git_repository, ''), COALESCE(git_branch, 'main'), COALESCE(root_directory, '/'),
+		       type, COALESCE(runtime_version, ''), COALESCE(build_command, ''), COALESCE(start_command, ''), port, replicas, cpu_limit, memory_limit,
+		       COALESCE(health_check_path, '/health'), health_check_interval, auto_deploy, ssl_enabled, status,
 		       traefik_config_updated_at, created_at, updated_at
 		FROM applications
 		WHERE user_id = $1
