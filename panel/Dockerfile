@@ -1,9 +1,20 @@
 # Panel Dockerfile - Laravel + Filament
 
+# Stage 0: Composer dependencies (used by frontend stage for Filament theme)
+FROM composer:2 AS composer
+
+WORKDIR /app
+
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
+
 # Stage 1: Build frontend assets
 FROM node:20-alpine AS frontend
 
 WORKDIR /app
+
+# Copy Composer vendor so Filament theme CSS can @import from vendor/
+COPY --from=composer /app/vendor ./vendor
 
 # Copy package files
 COPY package.json package-lock.json* ./
@@ -52,14 +63,13 @@ RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
     && docker-php-ext-enable redis \
     && apk del .build-deps
 
-# Install Composer
+# Install Composer (used for dump-autoload and artisan commands)
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 
-# Copy composer files first for caching
-COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
+# Reuse vendor from composer stage
+COPY --from=composer /app/vendor ./vendor
 
 # Copy application
 COPY . .
