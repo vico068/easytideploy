@@ -70,7 +70,7 @@ COPY --from=frontend /app/public/build ./public/build
 RUN composer dump-autoload --optimize
 
 # Publish Livewire assets (required for forms to work)
-RUN php artisan livewire:publish --assets --force
+RUN php artisan livewire:publish --assets
 
 # Set permissions
 RUN chown -R www-data:www-data storage bootstrap/cache \
