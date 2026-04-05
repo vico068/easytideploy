@@ -172,6 +172,7 @@ func (s *Server) Start() error {
 			r.Post("/sync", proxyHandler.Sync)
 			r.Post("/sync/{appId}", proxyHandler.SyncApplication)
 			r.Get("/config/{appId}", proxyHandler.GetConfig)
+			r.Delete("/config/{appId}", proxyHandler.DeleteConfig)
 		})
 
 		// Stats

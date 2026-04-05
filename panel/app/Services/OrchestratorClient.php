@@ -124,4 +124,10 @@ class OrchestratorClient
         return $this->http->get("/api/v1/containers/{$containerId}/stats")
             ->throw()->json();
     }
+
+    public function deleteTraefikConfig(Application $app): array
+    {
+        return $this->http->delete("/api/v1/proxy/config/{$app->id}")
+            ->throw()->json();
+    }
 }

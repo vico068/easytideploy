@@ -578,3 +578,38 @@ func (g *ConfigGenerator) GenerateYAMLConfig(ctx context.Context, applicationID 
 
 	return yamlBuilder.String(), nil
 }
+
+// DeleteConfig removes the Traefik configuration file for an application
+func (g *ConfigGenerator) DeleteConfig(ctx context.Context, applicationID string) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	// Get application to determine slug
+	app, err := g.getApplication(ctx, applicationID)
+	if err != nil {
+		// If application not found, config may already be deleted
+		log.Warn().Str("app_id", applicationID).Msg("Application not found, config may already be deleted")
+		return nil
+	}
+
+	// Delete configuration file
+	filename := fmt.Sprintf("app-%s.yml", applicationID)
+	configPath := filepath.Join(g.cfg.TraefikConfigDir, filename)
+
+	if err := os.Remove(configPath); err != nil {
+		if os.IsNotExist(err) {
+			// Already deleted, not an error
+			log.Info().Str("file", filename).Msg("Config file already deleted")
+			return nil
+		}
+		return fmt.Errorf("failed to delete config file: %w", err)
+	}
+
+	log.Info().
+		Str("app_id", applicationID).
+		Str("app_name", app.Name).
+		Str("file", filename).
+		Msg("Traefik configuration deleted")
+
+	return nil
+}

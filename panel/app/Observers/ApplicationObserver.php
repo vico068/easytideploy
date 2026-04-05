@@ -47,6 +47,22 @@ class ApplicationObserver
         );
     }
 
+    public function deleting(Application $application): void
+    {
+        // Cleanup application resources before deletion
+        try {
+            $orchestrator = app(\App\Services\OrchestratorClient::class);
+
+            // Stop all containers
+            $orchestrator->stop($application);
+
+            // Remove Traefik configuration
+            $orchestrator->deleteTraefikConfig($application);
+        } catch (\Exception $e) {
+            \Log::error("Failed to cleanup application {$application->id}: {$e->getMessage()}");
+        }
+    }
+
     public function deleted(Application $application): void
     {
         ActivityLog::log(

@@ -64,3 +64,18 @@ func (h *ProxyHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(configYAML))
 }
+
+// DeleteConfig removes the Traefik configuration for an application
+func (h *ProxyHandler) DeleteConfig(w http.ResponseWriter, r *http.Request) {
+	appID := chi.URLParam(r, "appId")
+
+	if err := h.traefikGen.DeleteConfig(r.Context(), appID); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to delete configuration")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, map[string]string{
+		"status":         "deleted",
+		"application_id": appID,
+	})
+}
