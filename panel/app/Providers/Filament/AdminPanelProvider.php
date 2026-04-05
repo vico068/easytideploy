@@ -11,7 +11,6 @@ use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
-use Filament\Support\Enums\ThemeMode;
 use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -35,7 +34,6 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogoHeight('2.5rem')
             ->font('Manrope')
             ->viteTheme('resources/css/filament/admin/theme.css')
-            ->defaultThemeMode(ThemeMode::Dark)
             ->sidebarWidth('280px')
             ->colors([
                 'primary' => Color::Sky,
