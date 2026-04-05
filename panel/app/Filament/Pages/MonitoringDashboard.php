@@ -106,6 +106,7 @@ class MonitoringDashboard extends Page
         $avgMemory = 0;
         $totalRequests = 0;
         $resourceChartData = ['labels' => [], 'datasets' => []];
+        $networkChartData = ['labels' => [], 'datasets' => []];
         $httpChartData = ['labels' => [], '2xx' => [], '3xx' => [], '4xx' => [], '5xx' => []];
 
         if ($selectedApp) {
@@ -219,6 +220,85 @@ class MonitoringDashboard extends Page
 
                 $resourceChartData = compact('labels', 'datasets');
             }
+
+            // Gráfico de rede por container (RX/TX em MB)
+            if (! empty($containerIds)) {
+                $netQuery = ResourceUsage::whereIn('container_id', $containerIds)
+                    ->where('recorded_at', '>=', $since);
+
+                if ($this->selectedContainerId) {
+                    $netQuery->where('container_id', $this->selectedContainerId);
+                }
+
+                $netData = $netQuery
+                    ->select([
+                        'container_id',
+                        DB::raw("to_timestamp(floor(extract(epoch from recorded_at) / {$bucketSeconds}) * {$bucketSeconds}) as period"),
+                        DB::raw('MAX(network_rx) as max_rx'),
+                        DB::raw('MAX(network_tx) as max_tx'),
+                    ])
+                    ->groupBy('container_id', 'period')
+                    ->orderBy('period')
+                    ->get();
+
+                $netLabels = $netData->pluck('period')
+                    ->unique()
+                    ->map(fn ($d) => \Carbon\Carbon::parse($d)->format($dateFormat))
+                    ->values()
+                    ->toArray();
+
+                $netDatasets = [];
+                $netColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
+                $netColorIdx = 0;
+
+                foreach ($netData->groupBy('container_id') as $containerId => $data) {
+                    $containerName = $containers->firstWhere('id', $containerId)?->name ?? substr($containerId, 0, 8);
+                    $color = $netColors[$netColorIdx % count($netColors)];
+                    $netColorIdx++;
+
+                    // Convert cumulative bytes to MB
+                    $rxValues = $data->pluck('max_rx')->values()->toArray();
+                    $txValues = $data->pluck('max_tx')->values()->toArray();
+
+                    // Convert to delta (difference between consecutive points) in MB
+                    $rxDelta = [];
+                    $txDelta = [];
+                    for ($i = 0; $i < count($rxValues); $i++) {
+                        if ($i === 0) {
+                            $rxDelta[] = 0;
+                            $txDelta[] = 0;
+                        } else {
+                            $rxDelta[] = round(max(0, ((int) $rxValues[$i] - (int) $rxValues[$i - 1]) / (1024 * 1024)), 2);
+                            $txDelta[] = round(max(0, ((int) $txValues[$i] - (int) $txValues[$i - 1]) / (1024 * 1024)), 2);
+                        }
+                    }
+
+                    $netDatasets[] = [
+                        'label' => $containerName.' RX (MB)',
+                        'data' => $rxDelta,
+                        'borderColor' => $color,
+                        'backgroundColor' => $color.'1a',
+                        'fill' => true,
+                        'tension' => 0.4,
+                        'borderWidth' => 2,
+                        'pointRadius' => 0,
+                    ];
+
+                    $netDatasets[] = [
+                        'label' => $containerName.' TX (MB)',
+                        'data' => $txDelta,
+                        'borderColor' => $color,
+                        'backgroundColor' => $color.'0d',
+                        'borderDash' => [5, 5],
+                        'fill' => true,
+                        'tension' => 0.4,
+                        'borderWidth' => 2,
+                        'pointRadius' => 0,
+                    ];
+                }
+
+                $networkChartData = ['labels' => $netLabels, 'datasets' => $netDatasets];
+            }
         }
 
         return [
@@ -232,6 +312,7 @@ class MonitoringDashboard extends Page
             'avgMemory' => $avgMemory,
             'totalRequests' => $totalRequests,
             'resourceChartData' => $resourceChartData,
+            'networkChartData' => $networkChartData,
             'httpChartData' => $httpChartData,
             'logs' => $selectedApp ? $this->getContainerLogs($selectedApp->id) : collect(),
         ];

@@ -202,6 +202,7 @@
     ============================================================ --}}
     <script id="httpChartData" type="application/json">@json($httpChartData)</script>
     <script id="resourceChartData" type="application/json">@json($resourceChartData)</script>
+    <script id="networkChartData" type="application/json">@json($networkChartData)</script>
 
     <div class="grid grid-cols-1 gap-5">
 
@@ -263,6 +264,29 @@
                 <div class="h-56 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700">
                     <x-heroicon-o-chart-bar class="w-10 h-10 mb-2 opacity-30" />
                     <p class="text-sm">Sem dados no período</p>
+                </div>
+            @endif
+        </div>
+
+        {{-- Network Chart --}}
+        <div class="bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-100 dark:border-white/5 p-5 shadow-sm">
+            <div class="flex items-center justify-between mb-5">
+                <div>
+                    <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Tráfego de Rede</h3>
+                    <p class="text-xs text-slate-400 mt-0.5">RX (download) e TX (upload) por período</p>
+                </div>
+                <div class="flex items-center gap-3 text-xs text-slate-500">
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-0.5 bg-blue-500 inline-block rounded"></span>RX</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-0.5 bg-blue-500 inline-block rounded border-dashed border border-blue-500"></span>TX</span>
+                </div>
+            </div>
+
+            @if(isset($networkChartData['labels']) && count($networkChartData['labels']) > 0)
+                <div class="h-56" id="networkChartContainer" wire:ignore><canvas></canvas></div>
+            @else
+                <div class="h-56 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700">
+                    <x-heroicon-o-signal class="w-10 h-10 mb-2 opacity-30" />
+                    <p class="text-sm">Sem dados de rede no período</p>
                 </div>
             @endif
         </div>
@@ -403,10 +427,62 @@
 
     const legendOpts = { display: true, position: 'bottom', labels: { color: tickColor, usePointStyle: true, padding: 16, font: { size: 11 } } };
 
+    // Detect local peaks: points higher than both neighbours, plus the global max
+    function getPeakRadii(data, peakRadius, maxRadius) {
+        peakRadius = peakRadius || 4;
+        maxRadius  = maxRadius  || 6;
+        if (!data || data.length === 0) return [];
+
+        const radii = new Array(data.length).fill(0);
+        const bgColors = new Array(data.length).fill('transparent');
+
+        // Find global max
+        let globalMaxIdx = 0;
+        let globalMaxVal = -Infinity;
+        for (let i = 0; i < data.length; i++) {
+            const v = data[i] ?? 0;
+            if (v > globalMaxVal) { globalMaxVal = v; globalMaxIdx = i; }
+        }
+
+        // Mark local peaks (value > both neighbours and > 0)
+        for (let i = 1; i < data.length - 1; i++) {
+            const prev = data[i - 1] ?? 0;
+            const curr = data[i] ?? 0;
+            const next = data[i + 1] ?? 0;
+            if (curr > 0 && curr > prev && curr > next) {
+                radii[i] = peakRadius;
+            }
+        }
+
+        // Global max gets bigger radius
+        if (globalMaxVal > 0) {
+            radii[globalMaxIdx] = maxRadius;
+        }
+
+        return radii;
+    }
+
+    function applyPeaks(dataset) {
+        const radii = getPeakRadii(dataset.data, 4, 6);
+        return {
+            ...dataset,
+            pointRadius: radii,
+            pointHoverRadius: radii.map(r => r > 0 ? r + 2 : 6),
+            pointBackgroundColor: radii.map((r, i) =>
+                r >= 6 ? dataset.borderColor : (r > 0 ? dataset.borderColor + 'aa' : 'transparent')
+            ),
+            pointBorderColor: radii.map((r) =>
+                r > 0 ? '#fff' : 'transparent'
+            ),
+            pointBorderWidth: radii.map(r => r >= 6 ? 2 : (r > 0 ? 1.5 : 0)),
+        };
+    }
+
     function initCharts() {
         // Read fresh data from JSON tags (Livewire updates these on re-render)
         const httpDataEl = document.getElementById('httpChartData');
         const rcDataEl   = document.getElementById('resourceChartData');
+        const netDataEl  = document.getElementById('networkChartData');
 
         // ── HTTP Chart ──
         const httpContainer = document.getElementById('httpChartContainer');
@@ -426,7 +502,7 @@
                             { label: '3xx', data: data['3xx'] || [], borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.08)', fill: true },
                             { label: '4xx', data: data['4xx'] || [], borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.08)', fill: true },
                             { label: '5xx', data: data['5xx'] || [], borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.08)', fill: true },
-                        ],
+                        ].map(applyPeaks),
                     },
                     options: { ...sharedOptions, plugins: { ...sharedOptions.plugins, legend: legendOpts } },
                 });
@@ -446,7 +522,7 @@
                     type: 'line',
                     data: {
                         labels: rcData.labels,
-                        datasets: (rcData.datasets || []).map(d => ({
+                        datasets: (rcData.datasets || []).map(d => applyPeaks({
                             label: d.label,
                             data: d.data,
                             borderColor: d.borderColor,
@@ -455,14 +531,65 @@
                             fill: false,
                             tension: 0.4,
                             borderWidth: 2,
-                            pointRadius: 0,
-                            hoverRadius: 5,
                         })),
                     },
                     options: {
                         ...sharedOptions,
                         plugins: { ...sharedOptions.plugins, legend: legendOpts },
                         scales: { ...sharedOptions.scales, y: { ...sharedOptions.scales.y, max: 100 } },
+                    },
+                });
+            }
+        }
+
+        // ── Network Chart ──
+        const netContainer = document.getElementById('networkChartContainer');
+        if (netContainer && netDataEl) {
+            const canvas = netContainer.querySelector('canvas');
+            const existing = Chart.getChart(canvas);
+            if (existing) existing.destroy();
+
+            const netData = JSON.parse(netDataEl.textContent);
+            if (netData.labels && netData.labels.length > 0) {
+                new Chart(canvas, {
+                    type: 'line',
+                    data: {
+                        labels: netData.labels,
+                        datasets: (netData.datasets || []).map(d => applyPeaks({
+                            label: d.label,
+                            data: d.data,
+                            borderColor: d.borderColor,
+                            backgroundColor: d.backgroundColor,
+                            borderDash: d.borderDash || [],
+                            fill: true,
+                            tension: 0.4,
+                            borderWidth: 2,
+                        })),
+                    },
+                    options: {
+                        ...sharedOptions,
+                        plugins: {
+                            ...sharedOptions.plugins,
+                            legend: legendOpts,
+                            tooltip: {
+                                ...sharedOptions.plugins.tooltip,
+                                callbacks: {
+                                    label: function(ctx) {
+                                        return ctx.dataset.label + ': ' + (ctx.parsed.y ?? 0).toFixed(3) + ' MB';
+                                    }
+                                }
+                            },
+                        },
+                        scales: {
+                            ...sharedOptions.scales,
+                            y: {
+                                ...sharedOptions.scales.y,
+                                ticks: {
+                                    ...sharedOptions.scales.y.ticks,
+                                    callback: function(v) { return v.toFixed(2) + ' MB'; }
+                                }
+                            },
+                        },
                     },
                 });
             }
