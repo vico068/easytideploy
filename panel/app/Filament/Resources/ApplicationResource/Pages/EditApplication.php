@@ -38,7 +38,8 @@ class EditApplication extends EditRecord
                 ->visible(fn () => $this->record->isActive())
                 ->action(fn () => $this->restartApplication()),
 
-            Actions\DeleteAction::make(),
+            Actions\DeleteAction::make()
+                ->successRedirectUrl(ApplicationResource::getUrl('index')),
         ];
     }
 
