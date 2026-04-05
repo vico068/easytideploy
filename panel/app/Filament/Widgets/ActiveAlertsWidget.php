@@ -2,11 +2,11 @@
 
 namespace App\Filament\Widgets;
 
+use App\Models\Alert;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Facades\DB;
 
 class ActiveAlertsWidget extends BaseWidget
 {
@@ -20,8 +20,8 @@ class ActiveAlertsWidget extends BaseWidget
     {
         return $table
             ->query(
-                fn () => DB::table('alerts')
-                    ->where('status', 'firing')
+                Alert::query()
+                    ->firing()
                     ->orderByDesc('starts_at')
                     ->limit(20)
             )
