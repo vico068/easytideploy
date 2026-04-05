@@ -16,6 +16,7 @@ class ServerMetricsChart extends ChartWidget
     protected int|string|array $columnSpan = 'full';
 
     protected static bool $isLazy = true;
+    protected static bool $isDiscovered = false;
 
     public ?string $filter = '1h';
 

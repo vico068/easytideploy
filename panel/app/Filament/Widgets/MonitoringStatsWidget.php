@@ -19,6 +19,8 @@ class MonitoringStatsWidget extends BaseWidget
 
     protected static bool $isLazy = true;
 
+    protected static bool $isDiscovered = false;
+
     protected function getStats(): array
     {
         // Estatísticas atuais

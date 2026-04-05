@@ -18,6 +18,7 @@ class StatusCodesChart extends ChartWidget
     ];
 
     protected static bool $isLazy = true;
+    protected static bool $isDiscovered = false;
 
     public ?string $filter = '24h';
 
