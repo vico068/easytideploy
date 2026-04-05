@@ -18,6 +18,40 @@ Route::prefix('webhooks')->group(function () {
 });
 
 // Internal API (called by orchestrator)
+// Get application details with decrypted secrets - secured with orchestrator API key
+Route::get('/internal/applications/{application}', function ($application, \Illuminate\Http\Request $request) {
+    $apiKey = $request->bearerToken();
+    if (! $apiKey || ! hash_equals(config('easydeploy.orchestrator_api_key') ?? '', $apiKey)) {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+
+    $app = \App\Models\Application::findOrFail($application);
+    $envVars = $app->getEnvironmentArray();
+
+    return response()->json([
+        'id' => $app->id,
+        'name' => $app->name,
+        'slug' => $app->slug,
+        'git_repository' => $app->git_repository ?? '',
+        'git_branch' => $app->git_branch ?? 'main',
+        'git_token' => $app->git_token ?? '',
+        'root_directory' => $app->root_directory ?? '/',
+        'type' => $app->type->value,
+        'runtime_version' => $app->runtime_version ?? '',
+        'build_command' => $app->build_command ?? '',
+        'start_command' => $app->start_command ?? '',
+        'port' => $app->port,
+        'replicas' => $app->replicas,
+        'cpu_limit' => $app->cpu_limit,
+        'memory_limit' => $app->memory_limit,
+        'health_check_path' => $app->health_check_path ?? '/health',
+        'health_check' => $app->health_check,
+        'auto_deploy' => $app->auto_deploy,
+        'ssl_enabled' => $app->ssl_enabled,
+        'environment' => empty($envVars) ? new \stdClass() : $envVars,
+    ]);
+});
+
 // Deployment status callback - secured with orchestrator API key
 Route::post('/internal/deployments/{deployment}/status', function ($deployment, \Illuminate\Http\Request $request) {
     $apiKey = $request->bearerToken();

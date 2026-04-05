@@ -163,6 +163,25 @@ func (s *Scheduler) handleBuildJob(data []byte) {
 
 	logger.Info().Msg("Starting build job")
 
+	// Enrich job with data from panel if git_token is missing
+	// The panel decrypts the token and returns it along with environment variables
+	if job.GitToken == "" && job.GitRepository != "" {
+		panelApp, err := s.fetchAppFromPanel(ctx, job.ApplicationID)
+		if err != nil {
+			logger.Warn().Err(err).Msg("Could not fetch app from panel, proceeding without token")
+		} else {
+			if panelApp.GitToken != "" {
+				job.GitToken = panelApp.GitToken
+			}
+			if len(job.Environment) == 0 && len(panelApp.Environment) > 0 {
+				job.Environment = panelApp.Environment
+			}
+			if job.CallbackURL == "" {
+				job.CallbackURL = fmt.Sprintf("%s/api/internal/deployments/%s/status", s.cfg.PanelURL, job.DeploymentID)
+			}
+		}
+	}
+
 	// Update deployment status to building
 	if err := s.updateDeploymentStatus(ctx, job.DeploymentID, StatusBuilding, ""); err != nil {
 		logger.Error().Err(err).Msg("Failed to update deployment status")
