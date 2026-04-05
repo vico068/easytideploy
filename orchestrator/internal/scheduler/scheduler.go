@@ -446,10 +446,10 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 			return fmt.Errorf("failed to pull image on agent: %w", err)
 		}
 
-		// Create container
+		// Create container with deployment ID in name to ensure uniqueness across deploys
 		containerResult, err := client.CreateContainer(ctx, &DeployRequest{
 			ImageName: fmt.Sprintf("%s:%s", result.AgentImageName, result.ImageTag),
-			Name:      fmt.Sprintf("%s-%s-%d", job.ApplicationID, result.ImageTag[:8], i),
+			Name:      fmt.Sprintf("%s-%s-%d", job.ApplicationID, job.DeploymentID[:8], i),
 			EnvVars:   job.Environment,
 			Port:      job.Port,
 			CPULimit:  int64(job.CPULimit),

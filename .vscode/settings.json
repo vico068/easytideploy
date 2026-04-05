@@ -5,6 +5,22 @@
             "approve": true,
             "matchCommandLine": true
         },
-        "sshpass": true
+        "sshpass": true,
+        "/^git add panel/app/Services/OrchestratorClient\\.php && git commit -m \"fix: send environment as JSON object instead of array to Orchestrator\" && git push origin main$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^apt-cache show protobuf-compiler 2>/dev/null \\| grep Version \\| head -1; go env GOPATH; ls /usr/local/bin/protoc\\* 2>/dev/null; ls \\$\\(go env GOPATH\\)/bin/protoc\\* 2>/dev/null$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "git commit": true,
+        "git add": true,
+        "git push": true,
+        "go": true,
+        "/^php -l /home/vinicius/Projetos/easytiphp/easyti-cloud/easydeploy/panel/app/Filament/Widgets/RequestsChart\\.php && php -l /home/vinicius/Projetos/easytiphp/easyti-cloud/easydeploy/panel/app/Filament/Widgets/StatusCodesChart\\.php && php -l /home/vinicius/Projetos/easytiphp/easyti-cloud/easydeploy/panel/app/Filament/Widgets/MonitoringStatsWidget\\.php && php -l /home/vinicius/Projetos/easytiphp/easyti-cloud/easydeploy/panel/routes/api\\.php && php -l /home/vinicius/Projetos/easytiphp/easyti-cloud/easydeploy/panel/app/Jobs/CleanupOldDeploymentsJob\\.php && php -l /home/vinicius/Projetos/easytiphp/easyti-cloud/easydeploy/panel/app/Filament/Resources/ApplicationResource/Pages/ViewApplicationMetrics\\.php && php -l /home/vinicius/Projetos/easytiphp/easyti-cloud/easydeploy/panel/routes/console\\.php$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }
