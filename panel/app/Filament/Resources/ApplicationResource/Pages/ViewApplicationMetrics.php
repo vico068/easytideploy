@@ -24,19 +24,14 @@ class ViewApplicationMetrics extends Page
         $this->record = $record;
     }
 
-    public function getTitle(): string
+    public function getTitle(): \Illuminate\Contracts\Support\Htmlable|string
     {
-        return "Métricas - {$this->record->name}";
+        return '';
     }
 
-    protected function getHeaderActions(): array
+    public function getBreadcrumbs(): array
     {
-        return [
-            \Filament\Actions\Action::make('back')
-                ->label('Voltar')
-                ->url(ApplicationResource::getUrl('edit', ['record' => $this->record]))
-                ->color('gray'),
-        ];
+        return [];
     }
 
     public function setPeriod(string $period): void
@@ -105,6 +100,7 @@ class ViewApplicationMetrics extends Page
 
         return [
             'period' => $this->period,
+            'backUrl' => ApplicationResource::getUrl('edit', ['record' => $this->record]),
             'resourceChartData' => [
                 'labels' => $resourceData->pluck('period')->map(fn ($d) => \Carbon\Carbon::parse($d)->format($dateFormat))->toArray(),
                 'cpu' => $resourceData->pluck('avg_cpu')->map(fn ($v) => round((float) $v, 2))->toArray(),
