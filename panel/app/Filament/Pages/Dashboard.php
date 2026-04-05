@@ -54,9 +54,9 @@ class Dashboard extends FilamentDashboard
             'application', fn ($q) => $q->where('user_id', $userId)
         )
             ->where('created_at', '>=', now()->subDays(13))
-            ->selectRaw('DATE(created_at) as date, COUNT(*) as total,
-                         SUM(status = "running") as success,
-                         SUM(status = "failed") as failed')
+            ->selectRaw("DATE(created_at) as date, COUNT(*) as total,
+                         SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) as success,
+                         SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed")
             ->groupBy('date')
             ->orderBy('date')
             ->get()
