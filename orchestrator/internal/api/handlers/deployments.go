@@ -29,6 +29,7 @@ func NewDeploymentHandler(db *database.DB, q *queue.RedisQueue, sched *scheduler
 }
 
 type CreateDeploymentRequest struct {
+	DeploymentID  string            `json:"deployment_id,omitempty"`
 	ApplicationID string            `json:"application_id"`
 	GitRepository string            `json:"git_repository"`
 	GitBranch     string            `json:"git_branch"`
@@ -134,16 +135,23 @@ func (h *DeploymentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		req.MemoryLimit = app.MemoryLimit
 	}
 
-	deploymentID := uuid.New().String()
+	// Use provided deployment ID or generate new one
+	deploymentID := req.DeploymentID
+	if deploymentID == "" {
+		deploymentID = uuid.New().String()
+	}
 
-	// Create deployment record
-	insertQuery := `
-		INSERT INTO deployments (id, application_id, status, commit_sha, triggered_by, created_at)
-		VALUES ($1, $2, 'pending', $3, 'api', NOW())
-	`
-	if _, err := h.db.Pool().Exec(r.Context(), insertQuery, deploymentID, req.ApplicationID, req.CommitSHA); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to create deployment")
-		return
+	// Create deployment record only if not provided by panel
+	// (panel-initiated deploys already have a deployment record)
+	if req.DeploymentID == "" {
+		insertQuery := `
+			INSERT INTO deployments (id, application_id, status, commit_sha, triggered_by, created_at)
+			VALUES ($1, $2, 'pending', $3, 'api', NOW())
+		`
+		if _, err := h.db.Pool().Exec(r.Context(), insertQuery, deploymentID, req.ApplicationID, req.CommitSHA); err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to create deployment")
+			return
+		}
 	}
 
 	// Get environment variables

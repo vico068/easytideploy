@@ -35,7 +35,7 @@ class DeploymentService
         // Call orchestrator
         try {
             $callbackUrl = url('/api/internal/deployments/' . $deployment->id . '/status');
-            $result = $this->orchestrator->deploy($application, $commitSha, $callbackUrl);
+            $result = $this->orchestrator->deploy($application, $deployment->id, $commitSha, $callbackUrl);
 
             $deployment->update([
                 'image_tag' => $result['image_tag'] ?? null,

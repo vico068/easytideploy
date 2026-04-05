@@ -20,11 +20,11 @@ class OrchestratorClient
             ->retry(3, 100);
     }
 
-    public function deploy(Application $app, ?string $commitSha = null, ?string $callbackUrl = null): array
+    public function deploy(Application $app, ?string $deploymentId = null, ?string $commitSha = null, ?string $callbackUrl = null): array
     {
         $environment = $app->getEnvironmentArray();
 
-        return $this->http->post('/api/v1/deployments', [
+        $payload = [
             'application_id' => $app->id,
             'git_repository' => $app->git_repository,
             'git_branch' => $app->git_branch,
@@ -41,7 +41,14 @@ class OrchestratorClient
             'environment' => empty($environment) ? new \stdClass() : $environment,
             'health_check' => $app->health_check,
             'callback_url' => $callbackUrl ?? '',
-        ])->throw()->json();
+        ];
+
+        // Add deployment_id if provided (panel-initiated deploys)
+        if ($deploymentId) {
+            $payload['deployment_id'] = $deploymentId;
+        }
+
+        return $this->http->post('/api/v1/deployments', $payload)->throw()->json();
     }
 
     public function scale(Application $app, int $replicas): array
