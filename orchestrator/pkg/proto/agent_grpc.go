@@ -126,6 +126,29 @@ type ServerStatsResponse struct {
 	ContainerCount int32
 }
 
+// ContainerStatsRequest represents a request for container statistics
+type ContainerStatsRequest struct {
+	ContainerId string
+}
+
+// ContainerStatsResponse represents container statistics
+type ContainerStatsResponse struct {
+	ContainerId    string
+	Status         string
+	Health         string
+	CpuPercent     float64
+	MemoryUsage    int64
+	MemoryLimit    int64
+	MemoryPercent  float64
+	NetworkRxBytes int64
+	NetworkTxBytes int64
+	BlockRead      int64
+	BlockWrite     int64
+	Pids           int64
+	RestartCount   int32
+	StartedAt      int64 // Unix timestamp
+}
+
 // PullImageRequest represents a request to pull an image
 type PullImageRequest struct {
 	Image        string `json:"ImageName"`
@@ -164,6 +187,7 @@ type AgentServiceClient interface {
 	GetContainerLogs(ctx context.Context, in *GetLogsRequest, opts ...grpc.CallOption) (AgentService_GetContainerLogsClient, error)
 	CheckHealth(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error)
 	GetServerStats(ctx context.Context, in *ServerStatsRequest, opts ...grpc.CallOption) (*ServerStatsResponse, error)
+	GetContainerStats(ctx context.Context, in *ContainerStatsRequest, opts ...grpc.CallOption) (*ContainerStatsResponse, error)
 	PullImage(ctx context.Context, in *PullImageRequest, opts ...grpc.CallOption) (*PullImageResponse, error)
 	BuildImage(ctx context.Context, in *BuildImageRequest, opts ...grpc.CallOption) (AgentService_BuildImageClient, error)
 }
@@ -272,6 +296,15 @@ func (c *agentServiceClient) CheckHealth(ctx context.Context, in *HealthCheckReq
 func (c *agentServiceClient) GetServerStats(ctx context.Context, in *ServerStatsRequest, opts ...grpc.CallOption) (*ServerStatsResponse, error) {
 	out := new(ServerStatsResponse)
 	err := c.cc.Invoke(ctx, "/agent.AgentService/GetServerStats", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentServiceClient) GetContainerStats(ctx context.Context, in *ContainerStatsRequest, opts ...grpc.CallOption) (*ContainerStatsResponse, error) {
+	out := new(ContainerStatsResponse)
+	err := c.cc.Invoke(ctx, "/agent.AgentService/GetContainerStats", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
