@@ -1,0 +1,4 @@
+/* Addon CSS para views customizadas do Filament (widgets + páginas)
+   SEM @tailwind base para não conflitar com o reset do Filament */
+@tailwind components;
+@tailwind utilities;
