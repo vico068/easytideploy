@@ -9,16 +9,16 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Container represents a container in the database
-type Container struct {
+// DatabaseContainer represents a container from the database
+type DatabaseContainer struct {
 	ID            string
 	ApplicationID string
 	ServerID      string
 	Status        string
 }
 
-// Server represents a server in the database
-type Server struct {
+// DatabaseServer represents a server from the database
+type DatabaseServer struct {
 	ID     string
 	Status string
 }
@@ -111,7 +111,7 @@ func (s *Scheduler) collectServerAndContainerMetrics() {
 }
 
 // getOnlineServers retrieves all online servers from the database
-func (s *Scheduler) getOnlineServers() ([]Server, error) {
+func (s *Scheduler) getOnlineServers() ([]DatabaseServer, error) {
 	query := `
 		SELECT id, status
 		FROM servers
@@ -119,15 +119,15 @@ func (s *Scheduler) getOnlineServers() ([]Server, error) {
 		ORDER BY id
 	`
 
-	rows, err := s.db.Query(query)
+	rows, err := s.db.Pool().Query(context.Background(), query)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var servers []Server
+	var servers []DatabaseServer
 	for rows.Next() {
-		var server Server
+		var server DatabaseServer
 		if err := rows.Scan(&server.ID, &server.Status); err != nil {
 			return nil, err
 		}
@@ -138,7 +138,7 @@ func (s *Scheduler) getOnlineServers() ([]Server, error) {
 }
 
 // getRunningContainersByServer retrieves all running containers for a server
-func (s *Scheduler) getRunningContainersByServer(serverID string) ([]Container, error) {
+func (s *Scheduler) getRunningContainersByServer(serverID string) ([]DatabaseContainer, error) {
 	query := `
 		SELECT id, application_id, server_id, status
 		FROM containers
@@ -146,15 +146,15 @@ func (s *Scheduler) getRunningContainersByServer(serverID string) ([]Container, 
 		ORDER BY id
 	`
 
-	rows, err := s.db.Query(query, serverID)
+	rows, err := s.db.Pool().Query(context.Background(), query, serverID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var containers []Container
+	var containers []DatabaseContainer
 	for rows.Next() {
-		var container Container
+		var container DatabaseContainer
 		if err := rows.Scan(&container.ID, &container.ApplicationID, &container.ServerID, &container.Status); err != nil {
 			return nil, err
 		}
@@ -188,7 +188,8 @@ func (s *Scheduler) saveServerMetrics(serverID string, stats interface{}) error 
 		VALUES ($1, $2, $3, $4, $5, NOW(), NOW(), NOW())
 	`
 
-	_, err := s.db.Exec(
+	_, err := s.db.Pool().Exec(
+		context.Background(),
 		query,
 		uuid.New().String(),
 		serverID,
@@ -201,7 +202,7 @@ func (s *Scheduler) saveServerMetrics(serverID string, stats interface{}) error 
 }
 
 // saveContainerMetrics persists container metrics to the database
-func (s *Scheduler) saveContainerMetrics(container Container, stats interface{}) error {
+func (s *Scheduler) saveContainerMetrics(container DatabaseContainer, stats interface{}) error {
 	// Type assert to ContainerStatsResponse
 	st, ok := stats.(*proto.ContainerStatsResponse)
 	if !ok {
@@ -218,7 +219,8 @@ func (s *Scheduler) saveContainerMetrics(container Container, stats interface{})
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW(), NOW())
 	`
 
-	_, err := s.db.Exec(
+	_, err := s.db.Pool().Exec(
+		context.Background(),
 		query,
 		uuid.New().String(),
 		container.ID,
