@@ -79,12 +79,12 @@ class MonitoringDashboard extends Page
         ];
     }
 
-    protected function getHeaderWidgetsColumns(): int|string|array
+    public function getHeaderWidgetsColumns(): int|string|array
     {
         return 1;
     }
 
-    protected function getFooterWidgetsColumns(): int|string|array
+    public function getFooterWidgetsColumns(): int|string|array
     {
         return 2;
     }
