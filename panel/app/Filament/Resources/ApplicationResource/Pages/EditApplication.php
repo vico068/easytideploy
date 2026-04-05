@@ -12,6 +12,8 @@ class EditApplication extends EditRecord
 {
     protected static string $resource = ApplicationResource::class;
 
+    protected static string $view = 'filament.resources.application-resource.pages.edit-application';
+
     protected function getHeaderActions(): array
     {
         return [
