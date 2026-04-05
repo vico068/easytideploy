@@ -239,6 +239,13 @@ func (h *ApplicationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 func (h *ApplicationHandler) Deploy(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
+	// Parse optional request body for git_token and callback_url
+	var req struct {
+		GitToken    string `json:"git_token,omitempty"`
+		CallbackURL string `json:"callback_url,omitempty"`
+	}
+	json.NewDecoder(r.Body).Decode(&req) // ignore errors, body is optional
+
 	app, err := h.repo.GetApplication(r.Context(), id)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "application not found")
@@ -259,13 +266,16 @@ func (h *ApplicationHandler) Deploy(w http.ResponseWriter, r *http.Request) {
 	// Get environment variables
 	envVars, _ := h.repo.GetEnvironmentVariablesAsMap(r.Context(), id)
 
+	// Use git_token from request body (decrypted by panel) if provided
+	gitToken := req.GitToken
+
 	// Queue build job
 	job := queue.BuildJob{
 		DeploymentID:  deploymentID,
 		ApplicationID: id,
 		GitRepository: app.GitRepository,
 		GitBranch:     app.GitBranch,
-		GitToken:      app.GitToken,
+		GitToken:      gitToken,
 		Type:          app.Type,
 		BuildCommand:  app.BuildCommand,
 		StartCommand:  app.StartCommand,
@@ -275,6 +285,7 @@ func (h *ApplicationHandler) Deploy(w http.ResponseWriter, r *http.Request) {
 		CPULimit:      app.CPULimit,
 		MemoryLimit:   app.MemoryLimit,
 		Environment:   envVars,
+		CallbackURL:   req.CallbackURL,
 	}
 
 	if err := h.queue.Enqueue("builds", job); err != nil {
