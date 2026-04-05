@@ -415,15 +415,15 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 		return err
 	}
 
-	// Cleanup containers from previous deployments before creating new ones
-	s.cleanupOldContainers(ctx, job.ApplicationID, job.DeploymentID, logger)
-
 	replicas := job.Replicas
 	if replicas <= 0 {
 		replicas = 1
 	}
 
-	logger.Info().Int("replicas", replicas).Msg("Deploying containers")
+	logger.Info().Int("replicas", replicas).Msg("Deploying containers with zero-downtime strategy")
+
+	// Track new containers for health checks
+	var newContainers []containerInfo
 
 	// Select servers and create containers
 	for i := 0; i < replicas; i++ {
@@ -476,17 +476,122 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 			Int("host_port", int(containerResult.HostPort)).
 			Int("replica", i).
 			Msg("Container created")
+
+		// Track new container for health checks
+		newContainers = append(newContainers, containerInfo{
+			dockerID:     containerResult.ContainerID,
+			serverID:     server.ID,
+			agentAddress: server.AgentAddress,
+		})
 	}
 
-	// Cleanup old containers from previous deployments
-	s.cleanupOldContainers(ctx, job.ApplicationID, job.DeploymentID, logger)
+	// Wait for new containers to become healthy before proceeding
+	logger.Info().Msg("Waiting for new containers to become healthy")
+	if err := s.waitForContainersHealthy(ctx, newContainers, logger); err != nil {
+		logger.Error().Err(err).Msg("New containers failed health checks")
+		return fmt.Errorf("new containers failed to become healthy: %w", err)
+	}
 
-	// Update Traefik configuration
+	logger.Info().Msg("All new containers are healthy")
+
+	// Update Traefik configuration to point to new containers
 	if err := s.updateTraefikConfig(ctx, job.ApplicationID); err != nil {
 		logger.Warn().Err(err).Msg("Failed to update Traefik config")
 	}
 
+	logger.Info().Msg("Traefik configuration updated, now cleaning up old containers")
+
+	// Now that new containers are healthy and Traefik is updated, cleanup old containers
+	s.cleanupOldContainers(ctx, job.ApplicationID, job.DeploymentID, logger)
+
+	logger.Info().Msg("Zero-downtime deployment completed successfully")
+
 	return nil
+}
+
+// waitForContainersHealthy waits for all new containers to pass health checks
+// before proceeding with the deployment. This ensures zero-downtime deployments.
+// containerInfo represents a container for health checking
+type containerInfo struct {
+	dockerID     string
+	serverID     string
+	agentAddress string
+}
+
+func (s *Scheduler) waitForContainersHealthy(ctx context.Context, containers []containerInfo, logger *zerolog.Logger) error {
+	const (
+		maxRetries      = 30  // Maximum number of health check attempts
+		retryInterval   = 2   // Seconds between retries
+		startupGraceSec = 5   // Initial grace period before first check
+	)
+
+	// Give containers a few seconds to start up
+	logger.Info().Int("grace_period_sec", startupGraceSec).Msg("Waiting for containers to start")
+	time.Sleep(time.Duration(startupGraceSec) * time.Second)
+
+	// Track health status for each container
+	healthyCount := 0
+	attempts := 0
+
+	for attempts < maxRetries {
+		healthyCount = 0
+		allHealthy := true
+
+		for _, container := range containers {
+			client, err := s.getAgentClient(container.serverID, container.agentAddress)
+			if err != nil {
+				logger.Warn().
+					Err(err).
+					Str("container", container.dockerID).
+					Msg("Failed to get agent client for health check")
+				allHealthy = false
+				continue
+			}
+
+			healthy, err := client.HealthCheck(ctx, container.dockerID)
+			if err != nil {
+				logger.Debug().
+					Err(err).
+					Str("container", container.dockerID).
+					Int("attempt", attempts+1).
+					Msg("Health check error")
+				allHealthy = false
+				continue
+			}
+
+			if healthy {
+				healthyCount++
+			} else {
+				allHealthy = false
+				logger.Debug().
+					Str("container", container.dockerID).
+					Int("attempt", attempts+1).
+					Msg("Container not yet healthy")
+			}
+		}
+
+		if allHealthy {
+			logger.Info().
+				Int("containers", healthyCount).
+				Int("attempts", attempts+1).
+				Msg("All containers are healthy")
+			return nil
+		}
+
+		attempts++
+		if attempts < maxRetries {
+			logger.Debug().
+				Int("healthy", healthyCount).
+				Int("total", len(containers)).
+				Int("attempt", attempts).
+				Int("max_attempts", maxRetries).
+				Msg("Waiting for containers to become healthy")
+			time.Sleep(time.Duration(retryInterval) * time.Second)
+		}
+	}
+
+	return fmt.Errorf("containers failed to become healthy after %d attempts (%d/%d healthy)",
+		maxRetries, healthyCount, len(containers))
 }
 
 func (s *Scheduler) updateDeploymentStatus(ctx context.Context, deploymentID string, status DeploymentStatus, errorMsg string) error {
