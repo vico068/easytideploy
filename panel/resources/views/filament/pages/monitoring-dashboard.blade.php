@@ -203,7 +203,7 @@
     <script id="httpChartData" type="application/json">@json($httpChartData)</script>
     <script id="resourceChartData" type="application/json">@json($resourceChartData)</script>
 
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
+    <div class="grid grid-cols-1 gap-5">
 
         {{-- HTTP Requests Chart --}}
         <div class="bg-white dark:bg-slate-800/50 rounded-2xl border border-gray-100 dark:border-white/5 p-5 shadow-sm">
@@ -221,7 +221,7 @@
             </div>
 
             @if(count($httpChartData['labels']) > 0)
-                <div class="h-56" id="httpChartContainer" wire:ignore><canvas></canvas></div>
+                <div class="h-56" id="httpChartContainer"><canvas></canvas></div>
             @else
                 <div class="h-56 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700">
                     <x-heroicon-o-globe-alt class="w-10 h-10 mb-2 opacity-30" />
@@ -258,7 +258,7 @@
             </div>
 
             @if(isset($resourceChartData['labels']) && count($resourceChartData['labels']) > 0)
-                <div class="h-56" id="resourceChartContainer" wire:ignore><canvas></canvas></div>
+                <div class="h-56" id="resourceChartContainer"><canvas></canvas></div>
             @else
                 <div class="h-56 flex flex-col items-center justify-center text-slate-400 bg-slate-50 dark:bg-slate-900/30 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-700">
                     <x-heroicon-o-chart-bar class="w-10 h-10 mb-2 opacity-30" />
@@ -471,11 +471,15 @@
     // Initial render
     $nextTick(() => initCharts());
 
-    // Reinitialize after every Livewire DOM update (debounced)
-    let chartDebounce = null;
+    // Reinitialize only when user changes app/period/container (NOT on poll)
+    $wire.on('charts-need-update', () => {
+        $nextTick(() => initCharts());
+    });
+
+    // Auto-scroll logs on poll updates
     Livewire.hook('morph.updated', () => {
-        clearTimeout(chartDebounce);
-        chartDebounce = setTimeout(() => initCharts(), 80);
+        const lc = document.getElementById('logsContainer');
+        if (lc) lc.scrollTop = lc.scrollHeight;
     });
 })();
 </script>

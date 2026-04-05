@@ -48,6 +48,7 @@ class MonitoringDashboard extends Page
     public function setPeriod(string $period): void
     {
         $this->period = $period;
+        $this->dispatch('charts-need-update');
     }
 
     public function setSelectedApp(string $appId): void
@@ -55,11 +56,13 @@ class MonitoringDashboard extends Page
         $app = Application::where('user_id', auth()->id())->find($appId);
         $this->selectedAppId = $app?->id;
         $this->selectedContainerId = null;
+        $this->dispatch('charts-need-update');
     }
 
     public function setSelectedContainer(?string $containerId): void
     {
         $this->selectedContainerId = $containerId;
+        $this->dispatch('charts-need-update');
     }
 
     protected function getViewData(): array
