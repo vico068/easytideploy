@@ -218,9 +218,9 @@ class ApplicationResource extends Resource
                     ->schema([
                         Forms\Components\TextInput::make('health_check.path')
                             ->label('Endpoint de health check')
-                            ->default('/health')
+                            ->default('/')
                             ->prefixIcon('heroicon-o-heart')
-                            ->placeholder('/health')
+                            ->placeholder('/')
                             ->helperText('Deve retornar HTTP 200 quando a aplicação estiver operacional')
                             ->hint('Crie um endpoint simples que retorne HTTP 200 com { "ok": true }')
                             ->hintIcon('heroicon-m-light-bulb'),
@@ -400,7 +400,6 @@ class ApplicationResource extends Resource
                 ]),
             ])
             ->defaultSort('updated_at', 'desc')
-            ->poll('10s')
             ->striped();
     }
 

@@ -17,3 +17,8 @@ Broadcast::channel('application.{applicationId}', function ($user, $applicationI
 
     return $app && $app->user_id === $user->id;
 });
+
+// User-level channel for dashboard, lists and widgets — receives all events for the user
+Broadcast::channel('user.{userId}', function ($user, $userId) {
+    return (int) $user->id === (int) $userId;
+});

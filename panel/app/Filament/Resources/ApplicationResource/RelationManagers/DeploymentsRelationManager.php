@@ -6,6 +6,7 @@ use App\Enums\DeploymentStatus;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Livewire\Attributes\On;
 
 class DeploymentsRelationManager extends RelationManager
 {
@@ -13,14 +14,19 @@ class DeploymentsRelationManager extends RelationManager
 
     protected static ?string $title = 'Deployments';
 
-    // Auto-refresh durante deployments ativos
-    protected static ?string $pollingInterval = '3s';
+    /** Application ID para o canal WebSocket — preenchido no mount() */
+    public string $applicationId = '';
+
+    public function mount(): void
+    {
+        parent::mount();
+        $this->applicationId = $this->ownerRecord->id ?? '';
+    }
 
     public function table(Table $table): Table
     {
         return $table
             ->recordTitleAttribute('id')
-            ->poll('3s')
             ->columns([
                 Tables\Columns\TextColumn::make('short_commit_sha')
                     ->label('Commit')
@@ -65,5 +71,12 @@ class DeploymentsRelationManager extends RelationManager
                     ->requiresConfirmation()
                     ->visible(fn ($record) => $record->isRunning()),
             ]);
+    }
+
+    /** Recebe mudança de status → atualiza a tabela de deployments em tempo real */
+    #[On('echo-private:application.{applicationId},DeploymentStatusChanged')]
+    public function onDeploymentStatusChanged(array $event): void
+    {
+        $this->resetTable();
     }
 }

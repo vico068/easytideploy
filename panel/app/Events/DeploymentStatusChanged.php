@@ -12,15 +12,31 @@ class DeploymentStatusChanged implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
+    public readonly ?string $userId;
+
     public function __construct(
         public readonly string $deploymentId,
         public readonly string $status,
         public readonly ?string $error = null,
-    ) {}
+        ?string $userId = null,
+    ) {
+        // Resolve userId for the user-level channel (dashboard, lists, widgets)
+        $this->userId = $userId ?? \App\Models\Deployment::with('application')
+            ->find($deploymentId)
+            ?->application
+            ?->user_id;
+    }
 
-    public function broadcastOn(): PrivateChannel
+    /** @return array<PrivateChannel> */
+    public function broadcastOn(): array
     {
-        return new PrivateChannel('deployment.' . $this->deploymentId);
+        $channels = [new PrivateChannel('deployment.' . $this->deploymentId)];
+
+        if ($this->userId) {
+            $channels[] = new PrivateChannel('user.' . $this->userId);
+        }
+
+        return $channels;
     }
 
     public function broadcastAs(): string
@@ -30,6 +46,10 @@ class DeploymentStatusChanged implements ShouldBroadcast
 
     public function broadcastWith(): array
     {
-        return ['status' => $this->status, 'error' => $this->error];
+        return [
+            'deployment_id' => $this->deploymentId,
+            'status' => $this->status,
+            'error' => $this->error,
+        ];
     }
 }

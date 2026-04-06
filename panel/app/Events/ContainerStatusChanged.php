@@ -15,9 +15,19 @@ class ContainerStatusChanged implements ShouldBroadcast
 
     public function __construct(public readonly Container $container) {}
 
-    public function broadcastOn(): PrivateChannel
+    /** @return array<PrivateChannel> */
+    public function broadcastOn(): array
     {
-        return new PrivateChannel('application.' . $this->container->application_id);
+        $channels = [new PrivateChannel('application.' . $this->container->application_id)];
+
+        $userId = $this->container->application?->user_id
+            ?? \App\Models\Application::find($this->container->application_id)?->user_id;
+
+        if ($userId) {
+            $channels[] = new PrivateChannel('user.' . $userId);
+        }
+
+        return $channels;
     }
 
     public function broadcastAs(): string
@@ -29,6 +39,7 @@ class ContainerStatusChanged implements ShouldBroadcast
     {
         return [
             'container_id' => $this->container->id,
+            'application_id' => $this->container->application_id,
             'name' => $this->container->name,
             'status' => $this->container->status,
             'health_status' => $this->container->health_status,
