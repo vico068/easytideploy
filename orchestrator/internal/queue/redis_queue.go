@@ -96,7 +96,28 @@ func (q *RedisQueue) Len(queueName string) (int64, error) {
 }
 
 func (q *RedisQueue) Publish(channel string, message string) error {
-	return q.client.Publish(context.Background(), channel, message).Err()
+	ctx := context.Background()
+	// Buffer the message in a list for subscribers that connect late
+	// TTL of 1 hour to avoid memory leaks
+	bufferKey := "buffer:" + channel
+	pipe := q.client.Pipeline()
+	pipe.RPush(ctx, bufferKey, message)
+	pipe.Expire(ctx, bufferKey, time.Hour)
+	pipe.Publish(ctx, channel, message)
+	_, err := pipe.Exec(ctx)
+	return err
+}
+
+// GetBufferedMessages retrieves all buffered messages for a channel
+func (q *RedisQueue) GetBufferedMessages(channel string) ([]string, error) {
+	bufferKey := "buffer:" + channel
+	return q.client.LRange(context.Background(), bufferKey, 0, -1).Result()
+}
+
+// ClearBuffer removes the buffer for a channel
+func (q *RedisQueue) ClearBuffer(channel string) error {
+	bufferKey := "buffer:" + channel
+	return q.client.Del(context.Background(), bufferKey).Err()
 }
 
 func (q *RedisQueue) Subscribe(ctx context.Context, channel string) *redis.PubSub {

@@ -7,12 +7,32 @@ use App\Services\DeploymentService;
 use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Livewire\Attributes\On;
 
 class EditApplication extends EditRecord
 {
     protected static string $resource = ApplicationResource::class;
 
     protected static string $view = 'filament.resources.application-resource.pages.edit-application';
+
+    public function getListeners(): array
+    {
+        $appId = $this->record?->id;
+        if (! $appId) {
+            return [];
+        }
+
+        return [
+            // Echo events para atualização em tempo real
+            "echo-private:application.{$appId},DeploymentStatusChanged" => 'refreshStatus',
+        ];
+    }
+
+    public function refreshStatus(): void
+    {
+        // Recarrega o record do banco para pegar o status atualizado
+        $this->record->refresh();
+    }
 
     protected function getHeaderActions(): array
     {
