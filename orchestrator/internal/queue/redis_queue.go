@@ -94,3 +94,11 @@ func (q *RedisQueue) Remove(queueName string, jobID string) error {
 func (q *RedisQueue) Len(queueName string) (int64, error) {
 	return q.client.LLen(context.Background(), queueName).Result()
 }
+
+func (q *RedisQueue) Publish(channel string, message string) error {
+	return q.client.Publish(context.Background(), channel, message).Err()
+}
+
+func (q *RedisQueue) Subscribe(ctx context.Context, channel string) *redis.PubSub {
+	return q.client.Subscribe(ctx, channel)
+}

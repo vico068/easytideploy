@@ -193,6 +193,7 @@ func (s *Scheduler) handleBuildJob(data []byte) {
 	if err != nil {
 		logger.Error().Err(err).Msg("Build pipeline failed")
 		s.updateDeploymentStatus(ctx, job.DeploymentID, StatusFailed, err.Error())
+		s.publishStatusEvent(job.DeploymentID, string(StatusFailed), err.Error())
 		go s.notifyPanel(job.CallbackURL, StatusFailed, err.Error(), "", "", "")
 		return
 	}
@@ -205,15 +206,20 @@ func (s *Scheduler) handleBuildJob(data []byte) {
 	}
 
 	// Deploy containers
+	s.publishStage(job.DeploymentID, "deploy", "running")
 	if err := s.deployContainers(ctx, &job, result, &logger); err != nil {
 		logger.Error().Err(err).Msg("Deployment failed")
+		s.publishStage(job.DeploymentID, "deploy", "failed")
 		s.updateDeploymentStatus(ctx, job.DeploymentID, StatusFailed, err.Error())
+		s.publishStatusEvent(job.DeploymentID, string(StatusFailed), err.Error())
 		go s.notifyPanel(job.CallbackURL, StatusFailed, err.Error(), result.BuildLogs, result.CommitSHA, result.CommitMsg)
 		return
 	}
 
+	s.publishStage(job.DeploymentID, "deploy", "success")
 	logger.Info().Msg("Build job completed successfully")
 	s.updateDeploymentStatus(ctx, job.DeploymentID, StatusRunning, "")
+	s.publishStatusEvent(job.DeploymentID, string(StatusRunning), "")
 	go s.notifyPanel(job.CallbackURL, StatusRunning, "", result.BuildLogs, result.CommitSHA, result.CommitMsg)
 }
 
@@ -235,6 +241,7 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 
 	// Step 1: Clone repository
 	logger.Info().Str("repo", job.GitRepository).Str("branch", job.GitBranch).Msg("Cloning repository")
+	s.publishStage(job.DeploymentID, "clone", "running")
 
 	cloneOpts := git.CloneOptions{
 		URL:        job.GitRepository,
@@ -249,8 +256,10 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 
 	repoPath, err := s.gitCloner.Clone(ctx, cloneOpts)
 	if err != nil {
+		s.publishStage(job.DeploymentID, "clone", "failed")
 		return nil, fmt.Errorf("failed to clone repository: %w", err)
 	}
+	s.publishStage(job.DeploymentID, "clone", "success")
 	defer s.gitCloner.Cleanup(repoPath)
 
 	// Get commit info
@@ -325,6 +334,7 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 	logger.Info().
 		Str("image", fmt.Sprintf("%s:%s", imageName, imageTag)).
 		Msg("Building Docker image")
+	s.publishStage(job.DeploymentID, "build", "running")
 
 	// Prepare build environment
 	buildEnv := make(map[string]string)
@@ -342,7 +352,7 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 	var buildLogs string
 	logCallback := func(line string) {
 		buildLogs += line
-		// Could also stream logs to the database or websocket
+		s.publishLogLine(job.DeploymentID, "build", line)
 	}
 
 	// Check if custom Dockerfile exists
@@ -363,6 +373,7 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 
 		buildResult, err := s.imageBuilder.Build(ctx, buildOpts, logCallback)
 		if err != nil {
+			s.publishStage(job.DeploymentID, "build", "failed")
 			return nil, fmt.Errorf("docker build failed: %w", err)
 		}
 		result.BuildLogs = buildResult.Logs
@@ -379,16 +390,19 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 			logCallback,
 		)
 		if err != nil {
+			s.publishStage(job.DeploymentID, "build", "failed")
 			return nil, fmt.Errorf("buildpack build failed: %w", err)
 		}
 		result.BuildLogs = buildResult.Logs
 	}
 
 	logger.Info().Msg("Docker image built successfully")
+	s.publishStage(job.DeploymentID, "build", "success")
 
 	// Step 4: Push to registry (if configured)
 	if s.cfg.DockerRegistry != "" {
 		logger.Info().Str("registry", s.cfg.DockerRegistry).Msg("Pushing image to registry")
+		s.publishStage(job.DeploymentID, "push", "running")
 
 		pushOpts := docker.PushOptions{
 			ImageName: imageName,
@@ -399,11 +413,13 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 		}
 
 		if err := s.imageBuilder.Push(ctx, pushOpts, logCallback); err != nil {
+			s.publishStage(job.DeploymentID, "push", "failed")
 			return nil, fmt.Errorf("failed to push image: %w", err)
 		}
 
 		result.ImageName = fmt.Sprintf("%s/%s", s.cfg.DockerRegistry, imageName)
 		result.AgentImageName = fmt.Sprintf("%s/%s", s.cfg.AgentRegistryAddr(), imageName)
+		s.publishStage(job.DeploymentID, "push", "success")
 	}
 
 	return result, nil
@@ -991,6 +1007,54 @@ func (s *Scheduler) StopContainer(ctx context.Context, containerID string) error
 	updateQuery := `UPDATE containers SET status = 'stopped', updated_at = NOW() WHERE id = $1`
 	_, err = s.db.Pool().Exec(ctx, updateQuery, containerID)
 	return err
+}
+
+// publishLogLine publishes a build log line to Redis Pub/Sub
+func (s *Scheduler) publishLogLine(deploymentID, stage, line string) {
+	payload, err := json.Marshal(map[string]string{
+		"type":  "log",
+		"stage": stage,
+		"line":  line,
+		"ts":    time.Now().Format(time.RFC3339),
+	})
+	if err != nil {
+		return
+	}
+	if err := s.queue.Publish("deploy-logs:"+deploymentID, string(payload)); err != nil {
+		log.Debug().Err(err).Str("deployment_id", deploymentID).Msg("Failed to publish log line")
+	}
+}
+
+// publishStage publishes a stage transition event to Redis Pub/Sub
+func (s *Scheduler) publishStage(deploymentID, stage, status string) {
+	payload, err := json.Marshal(map[string]string{
+		"type":   "stage",
+		"stage":  stage,
+		"status": status,
+		"ts":     time.Now().Format(time.RFC3339),
+	})
+	if err != nil {
+		return
+	}
+	if err := s.queue.Publish("deploy-logs:"+deploymentID, string(payload)); err != nil {
+		log.Debug().Err(err).Str("deployment_id", deploymentID).Msg("Failed to publish stage event")
+	}
+}
+
+// publishStatusEvent publishes a final deployment status event to Redis Pub/Sub
+func (s *Scheduler) publishStatusEvent(deploymentID, status, errorMsg string) {
+	payload, err := json.Marshal(map[string]string{
+		"type":   "status",
+		"status": status,
+		"error":  errorMsg,
+		"ts":     time.Now().Format(time.RFC3339),
+	})
+	if err != nil {
+		return
+	}
+	if err := s.queue.Publish("deploy-logs:"+deploymentID, string(payload)); err != nil {
+		log.Debug().Err(err).Str("deployment_id", deploymentID).Msg("Failed to publish status event")
+	}
 }
 
 // RemoveContainer removes a container via agent
