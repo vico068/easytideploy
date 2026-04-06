@@ -6,9 +6,11 @@
 @endphp
 
 {{--
-    Script vem PRIMEIRO para garantir que deploymentLogs() esteja definida
-    antes de Alpine processar o atributo x-data abaixo.
+    @script garante execução no Livewire v3 mesmo quando o conteúdo é
+    injetado via morphdom (modais Filament). Vem ANTES do x-data para que
+    deploymentLogs() esteja definida quando Alpine processar o elemento.
 --}}
+@script
 <script>
 function deploymentLogs(deploymentId, streamUrl, isTerminal) {
     return {
@@ -171,6 +173,7 @@ function deploymentLogs(deploymentId, streamUrl, isTerminal) {
     };
 }
 </script>
+@endscript
 
 <style>
     .deploy-terminal {
