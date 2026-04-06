@@ -207,6 +207,7 @@ func (b *ImageBuilder) BuildWithBuildpack(ctx context.Context, appType, version,
 		BuildArgs:   envVars,
 		Labels:      labels,
 		Pull:        true,
+		NoCache:     true, // Force fresh build to ensure buildpack changes take effect
 	}
 
 	return b.Build(ctx, opts, logCallback)

@@ -194,7 +194,12 @@ func (s *Scheduler) handleBuildJob(data []byte) {
 		logger.Error().Err(err).Msg("Build pipeline failed")
 		s.updateDeploymentStatus(ctx, job.DeploymentID, StatusFailed, err.Error())
 		s.publishStatusEvent(job.DeploymentID, string(StatusFailed), err.Error())
-		go s.notifyPanel(job.CallbackURL, StatusFailed, err.Error(), "", "", "")
+		// Include partial build logs even on failure (result is non-nil with logs)
+		buildLogs := ""
+		if result != nil {
+			buildLogs = result.BuildLogs
+		}
+		go s.notifyPanel(job.CallbackURL, StatusFailed, err.Error(), buildLogs, "", "")
 		return
 	}
 
@@ -374,7 +379,8 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 		buildResult, err := s.imageBuilder.Build(ctx, buildOpts, logCallback)
 		if err != nil {
 			s.publishStage(job.DeploymentID, "build", "failed")
-			return nil, fmt.Errorf("docker build failed: %w", err)
+			result.BuildLogs = buildLogs // Capture partial logs on failure
+			return result, fmt.Errorf("docker build failed: %w", err)
 		}
 		result.BuildLogs = buildResult.Logs
 	} else {
@@ -391,7 +397,8 @@ func (s *Scheduler) executeBuildPipeline(ctx context.Context, job *queue.BuildJo
 		)
 		if err != nil {
 			s.publishStage(job.DeploymentID, "build", "failed")
-			return nil, fmt.Errorf("buildpack build failed: %w", err)
+			result.BuildLogs = buildLogs // Capture partial logs on failure
+			return result, fmt.Errorf("buildpack build failed: %w", err)
 		}
 		result.BuildLogs = buildResult.Logs
 	}
