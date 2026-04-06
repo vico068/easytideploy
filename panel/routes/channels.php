@@ -2,8 +2,11 @@
 
 use Illuminate\Support\Facades\Broadcast;
 
+// Registrar rotas de broadcasting sem CSRF (sessão web é suficiente para autenticação)
+Broadcast::routes(['middleware' => ['auth:web']]);
+
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
-    return (int) $user->id === (int) $id;
+    return $user->id === $id;
 });
 
 Broadcast::channel('deployment.{deploymentId}', function ($user, $deploymentId) {
@@ -20,5 +23,5 @@ Broadcast::channel('application.{applicationId}', function ($user, $applicationI
 
 // User-level channel for dashboard, lists and widgets — receives all events for the user
 Broadcast::channel('user.{userId}', function ($user, $userId) {
-    return (int) $user->id === (int) $userId;
+    return $user->id === $userId;
 });

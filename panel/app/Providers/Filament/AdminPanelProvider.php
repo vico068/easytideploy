@@ -31,7 +31,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login(Login::class)
-            ->brandLogo(asset('images/logo-vertical-easyti-cloud.png'))
+            ->brandLogo(secure_asset('images/logo-vertical-easyti-cloud.png'))
             ->brandLogoHeight('2.5rem')
             ->font('Manrope')
             ->sidebarWidth('280px')
