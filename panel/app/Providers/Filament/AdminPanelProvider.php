@@ -55,8 +55,8 @@ class AdminPanelProvider extends PanelProvider
                         '<meta name="reverb-scheme" content="%s">',
                         htmlspecialchars(config('reverb.apps.apps.0.key', ''), ENT_QUOTES),
                         htmlspecialchars(env('REVERB_PUBLIC_HOST', parse_url(config('app.url'), PHP_URL_HOST) ?? 'localhost'), ENT_QUOTES),
-                        htmlspecialchars(env('REVERB_PUBLIC_PORT', '9001'), ENT_QUOTES),
-                        htmlspecialchars(env('REVERB_PUBLIC_SCHEME', 'http'), ENT_QUOTES),
+                        htmlspecialchars(env('REVERB_PUBLIC_PORT', '443'), ENT_QUOTES),
+                        htmlspecialchars(env('REVERB_PUBLIC_SCHEME', 'https'), ENT_QUOTES),
                     )
                 )
             )

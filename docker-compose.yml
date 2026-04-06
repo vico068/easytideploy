@@ -209,7 +209,7 @@ services:
       REVERB_SCHEME: http
       # Public-facing address injected into meta tags for the browser WebSocket connection
       REVERB_PUBLIC_HOST: ${REVERB_PUBLIC_HOST:-deploy.easyti.cloud}
-      REVERB_PUBLIC_PORT: ${REVERB_PUBLIC_PORT:-9001}
+      REVERB_PUBLIC_PORT: ${REVERB_PUBLIC_PORT:-443}
       REVERB_PUBLIC_SCHEME: ${REVERB_PUBLIC_SCHEME:-https}
     ports:
       - "${PANEL_PORT:-8000}:8000"
