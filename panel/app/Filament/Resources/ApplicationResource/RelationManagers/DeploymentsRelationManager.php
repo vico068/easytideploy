@@ -73,7 +73,14 @@ class DeploymentsRelationManager extends RelationManager
             ]);
     }
 
-    /** Recebe mudança de status → atualiza a tabela de deployments em tempo real */
+    /** Refresh imediato quando o botão Deploy é clicado na página pai */
+    #[On('deployment-triggered')]
+    public function onDeploymentTriggered(): void
+    {
+        $this->resetTable();
+    }
+
+    /** Recebe mudança de status via WebSocket → atualiza a tabela em tempo real */
     #[On('echo-private:application.{applicationId},DeploymentStatusChanged')]
     public function onDeploymentStatusChanged(array $event): void
     {

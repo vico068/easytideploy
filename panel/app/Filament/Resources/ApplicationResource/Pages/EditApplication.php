@@ -51,6 +51,9 @@ class EditApplication extends EditRecord
             $deploymentService = app(DeploymentService::class);
             $deployment = $deploymentService->trigger($this->record);
 
+            // Avisa o DeploymentsRelationManager para recarregar a tabela imediatamente
+            $this->dispatch('deployment-triggered');
+
             Notification::make()
                 ->success()
                 ->title('Deploy iniciado!')
