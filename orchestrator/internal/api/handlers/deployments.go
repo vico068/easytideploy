@@ -278,10 +278,6 @@ func (h *DeploymentHandler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 
 	// Get the underlying ResponseWriter that supports Flusher
 	flusher := getFlusher(w)
-	if flusher == nil {
-		respondError(w, http.StatusInternalServerError, "streaming not supported")
-		return
-	}
 
 	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -407,23 +403,18 @@ func getFlusher(w http.ResponseWriter) http.Flusher {
 		return flusher
 	}
 
-	// Try to unwrap (for wrapped ResponseWriters like chi's wrapResponseWriter)
-	type unwrapper interface {
-		Unwrap() http.ResponseWriter
-	}
+	// Go 1.20+ ResponseController approach - works with wrapped ResponseWriters
+	rc := http.NewResponseController(w)
+	return &rcFlusher{rc: rc}
+}
 
-	for {
-		if u, ok := w.(unwrapper); ok {
-			w = u.Unwrap()
-			if flusher, ok := w.(http.Flusher); ok {
-				return flusher
-			}
-		} else {
-			break
-		}
-	}
+// rcFlusher wraps http.ResponseController to implement http.Flusher
+type rcFlusher struct {
+	rc *http.ResponseController
+}
 
-	return nil
+func (f *rcFlusher) Flush() {
+	f.rc.Flush()
 }
 
 // Retry retries a failed deployment
