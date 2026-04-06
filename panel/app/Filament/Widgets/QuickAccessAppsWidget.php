@@ -5,6 +5,7 @@ namespace App\Filament\Widgets;
 use App\Filament\Resources\ApplicationResource;
 use App\Models\Application;
 use Filament\Widgets\Widget;
+use Livewire\Attributes\On;
 
 class QuickAccessAppsWidget extends Widget
 {
@@ -13,6 +14,25 @@ class QuickAccessAppsWidget extends Widget
     protected static ?int $sort = 2;
 
     protected int|string|array $columnSpan = 'full';
+
+    public int $userId = 0;
+
+    public function mount(): void
+    {
+        $this->userId = auth()->id() ?? 0;
+    }
+
+    #[On('echo-private:user.{userId},ContainerStatusChanged')]
+    public function onContainerStatusChanged(array $event): void
+    {
+        $this->dispatch('$refresh');
+    }
+
+    #[On('echo-private:user.{userId},DeploymentStatusChanged')]
+    public function onDeploymentStatusChanged(array $event): void
+    {
+        $this->dispatch('$refresh');
+    }
 
     protected function getViewData(): array
     {

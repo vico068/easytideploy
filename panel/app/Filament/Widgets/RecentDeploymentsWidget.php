@@ -7,6 +7,7 @@ use App\Models\Deployment;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
+use Livewire\Attributes\On;
 
 class RecentDeploymentsWidget extends BaseWidget
 {
@@ -15,6 +16,19 @@ class RecentDeploymentsWidget extends BaseWidget
     protected static ?int $sort = 3;
 
     protected int|string|array $columnSpan = 'full';
+
+    public int $userId = 0;
+
+    public function mount(): void
+    {
+        $this->userId = auth()->id() ?? 0;
+    }
+
+    #[On('echo-private:user.{userId},DeploymentStatusChanged')]
+    public function onDeploymentStatusChanged(array $event): void
+    {
+        $this->resetTable();
+    }
 
     public function table(Table $table): Table
     {
