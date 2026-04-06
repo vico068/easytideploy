@@ -254,6 +254,7 @@
 <script>
 (function() {
     const deploymentId = '{{ $deploymentId }}';
+    const streamUrl = '{{ route("deployments.logs.stream", $deployment) }}';
     const terminalBody = document.getElementById('terminal-body-' + deploymentId);
     const lineCount = document.getElementById('line-count-' + deploymentId);
     const emptyState = document.getElementById('empty-state-' + deploymentId);
@@ -264,6 +265,9 @@
 
     let logCount = {{ count($existingLogs) }};
     let autoScroll = true;
+    let eventSource = null;
+    let reconnectAttempts = 0;
+    const maxReconnects = 3;
 
     const statusLabels = {
         pending: 'Pendente',
@@ -285,6 +289,8 @@
     }
 
     function addLogLine(line) {
+        if (!line || line.trim() === '') return;
+
         if (emptyState) emptyState.remove();
 
         logCount++;
@@ -318,7 +324,87 @@
         if (['running', 'failed', 'cancelled', 'rolled_back'].includes(status)) {
             if (cursor) cursor.remove();
             if (liveIndicator) liveIndicator.style.display = 'none';
+            closeConnection();
         }
+    }
+
+    function closeConnection() {
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+    }
+
+    function connectSSE() {
+        if (eventSource) {
+            eventSource.close();
+        }
+
+        eventSource = new EventSource(streamUrl);
+
+        eventSource.addEventListener('log', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.line) addLogLine(data.line);
+            } catch (err) {
+                console.error('Error parsing log event:', err);
+            }
+        });
+
+        eventSource.addEventListener('status', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.status) updateStatus(data.status);
+            } catch (err) {
+                console.error('Error parsing status event:', err);
+            }
+        });
+
+        eventSource.addEventListener('stage', function(e) {
+            try {
+                const data = JSON.parse(e.data);
+                if (data.stage) {
+                    addLogLine('>>> Stage: ' + data.stage + ' (' + (data.status || 'started') + ')');
+                }
+            } catch (err) {
+                console.error('Error parsing stage event:', err);
+            }
+        });
+
+        eventSource.addEventListener('done', function(e) {
+            console.log('SSE stream ended:', e.data);
+            closeConnection();
+        });
+
+        eventSource.addEventListener('timeout', function(e) {
+            console.log('SSE stream timeout:', e.data);
+            closeConnection();
+        });
+
+        eventSource.addEventListener('heartbeat', function(e) {
+            // Heartbeat received - connection is alive
+            reconnectAttempts = 0;
+        });
+
+        eventSource.onerror = function(e) {
+            console.error('SSE connection error:', e);
+
+            if (eventSource.readyState === EventSource.CLOSED) {
+                closeConnection();
+
+                // Try to reconnect a few times
+                if (reconnectAttempts < maxReconnects) {
+                    reconnectAttempts++;
+                    console.log('Attempting to reconnect... (' + reconnectAttempts + '/' + maxReconnects + ')');
+                    setTimeout(connectSSE, 2000 * reconnectAttempts);
+                }
+            }
+        };
+
+        eventSource.onopen = function() {
+            console.log('SSE connection established');
+            reconnectAttempts = 0;
+        };
     }
 
     // Detectar scroll manual
@@ -327,32 +413,25 @@
         autoScroll = atBottom;
     });
 
-    // Conectar ao Echo
-    if (window.Echo) {
-        const channel = window.Echo.private('deployment.' + deploymentId);
+    // Iniciar conexão SSE
+    connectSSE();
 
-        channel.listen('.BuildLogReceived', function(e) {
-            if (e.line) addLogLine(e.line);
-        });
-
-        channel.listen('.DeploymentStatusChanged', function(e) {
-            if (e.status) updateStatus(e.status);
-        });
-
-        // Cleanup quando modal fechar
-        const modal = document.getElementById('deployment-logs-' + deploymentId).closest('[x-data]');
-        if (modal) {
-            const observer = new MutationObserver(function(mutations) {
-                mutations.forEach(function(mutation) {
-                    if (mutation.removedNodes.length > 0) {
-                        window.Echo.leave('deployment.' + deploymentId);
-                        observer.disconnect();
-                    }
-                });
+    // Cleanup quando modal fechar
+    const modal = document.getElementById('deployment-logs-' + deploymentId).closest('[x-data]');
+    if (modal) {
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.removedNodes.length > 0) {
+                    closeConnection();
+                    observer.disconnect();
+                }
             });
-            observer.observe(modal.parentNode, { childList: true });
-        }
+        });
+        observer.observe(modal.parentNode, { childList: true });
     }
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', closeConnection);
 })();
 </script>
 @endif

@@ -269,10 +269,17 @@ func (h *DeploymentHandler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	// Check if deployment exists and get current status/logs
-	query := `SELECT status, build_logs FROM deployments WHERE id = $1`
+	query := `SELECT status, COALESCE(build_logs, '') FROM deployments WHERE id = $1`
 	var status, buildLogs string
 	if err := h.db.Pool().QueryRow(r.Context(), query, id).Scan(&status, &buildLogs); err != nil {
 		respondError(w, http.StatusNotFound, "deployment not found")
+		return
+	}
+
+	// Get the underlying ResponseWriter that supports Flusher
+	flusher := getFlusher(w)
+	if flusher == nil {
+		respondError(w, http.StatusInternalServerError, "streaming not supported")
 		return
 	}
 
@@ -282,12 +289,6 @@ func (h *DeploymentHandler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("X-Accel-Buffering", "no")
-
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		respondError(w, http.StatusInternalServerError, "streaming not supported")
-		return
-	}
 
 	// Send existing logs first (from database)
 	if buildLogs != "" {
@@ -396,6 +397,33 @@ func splitLines(s string) []string {
 
 func isTerminalStatus(status string) bool {
 	return status == "running" || status == "failed" || status == "cancelled" || status == "rolled_back"
+}
+
+// getFlusher attempts to get an http.Flusher from a ResponseWriter,
+// unwrapping wrapped writers if necessary.
+func getFlusher(w http.ResponseWriter) http.Flusher {
+	// Try direct cast first
+	if flusher, ok := w.(http.Flusher); ok {
+		return flusher
+	}
+
+	// Try to unwrap (for wrapped ResponseWriters like chi's wrapResponseWriter)
+	type unwrapper interface {
+		Unwrap() http.ResponseWriter
+	}
+
+	for {
+		if u, ok := w.(unwrapper); ok {
+			w = u.Unwrap()
+			if flusher, ok := w.(http.Flusher); ok {
+				return flusher
+			}
+		} else {
+			break
+		}
+	}
+
+	return nil
 }
 
 // Retry retries a failed deployment
