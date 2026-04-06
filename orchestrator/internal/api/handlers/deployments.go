@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/easyti/easydeploy/orchestrator/internal/database"
@@ -261,6 +262,140 @@ func (h *DeploymentHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		"id":     id,
 		"status": "cancelled",
 	})
+}
+
+// StreamLogs streams deployment logs via Server-Sent Events
+func (h *DeploymentHandler) StreamLogs(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	// Check if deployment exists and get current status/logs
+	query := `SELECT status, build_logs FROM deployments WHERE id = $1`
+	var status, buildLogs string
+	if err := h.db.Pool().QueryRow(r.Context(), query, id).Scan(&status, &buildLogs); err != nil {
+		respondError(w, http.StatusNotFound, "deployment not found")
+		return
+	}
+
+	// Set SSE headers
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		respondError(w, http.StatusInternalServerError, "streaming not supported")
+		return
+	}
+
+	// Send existing logs first (from database)
+	if buildLogs != "" {
+		lines := splitLines(buildLogs)
+		for _, line := range lines {
+			if line == "" {
+				continue
+			}
+			sendSSE(w, flusher, "log", map[string]string{
+				"line":  line,
+				"stage": "build",
+				"ts":    "",
+			})
+		}
+	}
+
+	// Send current status
+	sendSSE(w, flusher, "status", map[string]string{
+		"status": status,
+	})
+
+	// If deployment is already terminal, close the connection
+	if isTerminalStatus(status) {
+		sendSSE(w, flusher, "done", map[string]string{"status": status})
+		return
+	}
+
+	// Subscribe to Redis Pub/Sub for live updates
+	channel := "deploy-logs:" + id
+	ctx := r.Context()
+	pubsub := h.queue.Subscribe(ctx, channel)
+	defer pubsub.Close()
+
+	// Also get buffered messages that might have been published before we subscribed
+	buffered, err := h.queue.GetBufferedMessages(channel)
+	if err == nil {
+		for _, msg := range buffered {
+			var payload map[string]string
+			if json.Unmarshal([]byte(msg), &payload) == nil {
+				msgType := payload["type"]
+				if msgType == "" {
+					msgType = "log"
+				}
+				sendSSE(w, flusher, msgType, payload)
+
+				// Check if terminal status
+				if msgType == "status" && isTerminalStatus(payload["status"]) {
+					sendSSE(w, flusher, "done", map[string]string{"status": payload["status"]})
+					return
+				}
+			}
+		}
+	}
+
+	// Listen for new messages
+	ch := pubsub.Channel()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
+
+			var payload map[string]string
+			if json.Unmarshal([]byte(msg.Payload), &payload) != nil {
+				continue
+			}
+
+			msgType := payload["type"]
+			if msgType == "" {
+				msgType = "log"
+			}
+			sendSSE(w, flusher, msgType, payload)
+
+			// Check if terminal status
+			if msgType == "status" && isTerminalStatus(payload["status"]) {
+				sendSSE(w, flusher, "done", map[string]string{"status": payload["status"]})
+				return
+			}
+		}
+	}
+}
+
+func sendSSE(w http.ResponseWriter, flusher http.Flusher, event string, data map[string]string) {
+	jsonData, _ := json.Marshal(data)
+	fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event, jsonData)
+	flusher.Flush()
+}
+
+func splitLines(s string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			lines = append(lines, s[start:i])
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
+}
+
+func isTerminalStatus(status string) bool {
+	return status == "running" || status == "failed" || status == "cancelled" || status == "rolled_back"
 }
 
 // Retry retries a failed deployment

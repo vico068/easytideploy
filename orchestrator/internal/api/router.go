@@ -93,6 +93,13 @@ func (s *Server) Start() error {
 	r.Post("/webhooks/gitlab", webhookHandler.HandleGitLab)
 	r.Post("/webhooks/bitbucket", webhookHandler.HandleBitbucket)
 
+	// SSE streaming endpoints (without timeout middleware)
+	r.Route("/api/v1/stream", func(r chi.Router) {
+		r.Use(middleware.Auth(s.cfg.APIKey))
+		deployHandler := handlers.NewDeploymentHandler(s.db, s.queue, s.scheduler, s.repo)
+		r.Get("/deployments/{id}/logs", deployHandler.StreamLogs)
+	})
+
 	// API v1 routes (protected)
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(middleware.Auth(s.cfg.APIKey))

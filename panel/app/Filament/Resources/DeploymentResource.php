@@ -157,7 +157,7 @@ class DeploymentResource extends Resource
                     ->label('Ver logs')
                     ->icon('heroicon-o-document-text')
                     ->color('info')
-                    ->modalContent(fn (Deployment $record) => view('filament.modals.deployment-logs', ['deployment' => $record]))
+                    ->modalContent(fn (Deployment $record) => view('filament.modals.deployment-logs-sse', ['deployment' => $record->load('application')]))
                     ->modalWidth('5xl')
                     ->modalIcon('heroicon-o-document-text'),
 

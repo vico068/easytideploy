@@ -7,7 +7,6 @@ use App\Enums\DeploymentStatus;
 use App\Events\DeploymentCompleted;
 use App\Events\DeploymentFailed;
 use App\Events\DeploymentStarted;
-use App\Jobs\ListenDeploymentLogs;
 use App\Models\Application;
 use App\Models\Deployment;
 use Illuminate\Support\Facades\Redis;
@@ -33,11 +32,6 @@ class DeploymentService
 
         // Dispatch event
         event(new DeploymentStarted($deployment));
-
-        // Inicia o listener de logs ANTES de chamar o orquestrador para evitar
-        // race condition: garante que o worker já esteja inscrito no Redis Pub/Sub
-        // antes do orquestrador começar a publicar eventos
-        ListenDeploymentLogs::dispatch($deployment->id)->onQueue('deploy-logs');
 
         // Call orchestrator
         try {
