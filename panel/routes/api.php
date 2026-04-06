@@ -132,6 +132,80 @@ Route::post('/internal/metrics/batch', function (\Illuminate\Http\Request $reque
     return response()->json(['success' => true, 'count' => count($validated['http_metrics'])]);
 });
 
+// Build logs SSE stream - secured with orchestrator API key
+// Browser connects to this endpoint and receives real-time build logs via Server-Sent Events
+Route::get('/internal/deployments/{id}/build-logs/stream', function ($id, \Illuminate\Http\Request $request) {
+    $apiKey = $request->bearerToken() ?? $request->query('api_key');
+    if (! $apiKey || ! hash_equals(config('easydeploy.orchestrator_api_key') ?? '', $apiKey)) {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+
+    $deployment = \App\Models\Deployment::find($id);
+    if (! $deployment) {
+        return response()->json(['error' => 'Not Found'], 404);
+    }
+
+    return response()->stream(function () use ($deployment) {
+        set_time_limit(0);
+        @ob_end_clean();
+        ob_implicit_flush(true);
+
+        $sendEvent = function (string $event, string $data) {
+            echo "event: {$event}\n";
+            echo "data: {$data}\n\n";
+            if (ob_get_level() > 0) {
+                ob_flush();
+            }
+            flush();
+        };
+
+        // If deployment is in a terminal state, return stored logs from DB and close
+        if ($deployment->isTerminal()) {
+            $buildLogs = $deployment->build_logs ?? '';
+            if ($buildLogs !== '') {
+                foreach (explode("\n", $buildLogs) as $line) {
+                    $sendEvent('log', json_encode(['line' => $line, 'stage' => 'build', 'ts' => now()->toIso8601String()]));
+                }
+            }
+            $sendEvent('status', json_encode(['status' => $deployment->status->value]));
+            $sendEvent('done', '{}');
+            return;
+        }
+
+        // Deployment is active: subscribe to Redis Pub/Sub channel
+        $redis = \Illuminate\Support\Facades\Redis::connection()->client();
+        $pubsub = $redis->pubSubLoop();
+        $pubsub->subscribe('deploy-logs:' . $deployment->id);
+
+        $terminalStatuses = ['running', 'failed', 'cancelled', 'rolled_back'];
+
+        foreach ($pubsub as $message) {
+            if (connection_aborted()) {
+                break;
+            }
+
+            if ($message->kind === 'message') {
+                $payload = json_decode($message->payload, true);
+                $type = $payload['type'] ?? 'log';
+                $sendEvent($type, $message->payload);
+
+                // Close stream if we received a terminal status
+                if ($type === 'status' && in_array($payload['status'] ?? '', $terminalStatuses)) {
+                    $sendEvent('done', '{}');
+                    break;
+                }
+            }
+        }
+
+        unset($pubsub);
+    }, 200, [
+        'Content-Type' => 'text/event-stream',
+        'Cache-Control' => 'no-cache',
+        'X-Accel-Buffering' => 'no',
+        'Connection' => 'keep-alive',
+    ]);
+});
+
 Route::prefix('internal')->middleware('auth:sanctum')->group(function () {
     Route::post('/containers/{container}/status', function ($container, \Illuminate\Http\Request $request) {
         $container = \App\Models\Container::findOrFail($container);

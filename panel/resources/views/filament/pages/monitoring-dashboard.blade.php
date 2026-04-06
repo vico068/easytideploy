@@ -296,7 +296,7 @@
     {{-- ============================================================
          LOGS TERMINAL
     ============================================================ --}}
-    <div class="bg-slate-900 rounded-2xl border border-slate-700 overflow-hidden shadow-lg" wire:poll.5000ms="refreshLogs">
+    <div class="bg-slate-900 rounded-2xl border border-slate-700 overflow-hidden shadow-lg" wire:poll.30000ms="refreshLogs">
 
         {{-- Terminal header --}}
         <div class="bg-slate-800/70 px-5 py-3 border-b border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">

@@ -7,6 +7,7 @@ use App\Models\Container;
 use App\Models\HttpMetric;
 use App\Models\ResourceUsage;
 use App\Services\OrchestratorClient;
+use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -31,6 +32,9 @@ class MonitoringDashboard extends Page
 
     public ?string $selectedContainerId = null;
 
+    /** @var array<string, string> Previous container statuses for change detection */
+    public array $previousContainerStatuses = [];
+
     public function mount(): void
     {
         $appId = request()->query('app');
@@ -43,6 +47,13 @@ class MonitoringDashboard extends Page
         if (! $this->selectedAppId) {
             $this->selectedAppId = Application::where('user_id', auth()->id())
                 ->value('id');
+        }
+
+        // Initialize previous container statuses for change detection
+        if ($this->selectedAppId) {
+            $this->previousContainerStatuses = Container::where('application_id', $this->selectedAppId)
+                ->pluck('status', 'id')
+                ->toArray();
         }
     }
 
@@ -391,7 +402,35 @@ class MonitoringDashboard extends Page
 
     public function refreshLogs(): void
     {
-        // Livewire re-renderiza automaticamente
+        $this->checkContainerStatusChanges();
+    }
+
+    protected function checkContainerStatusChanges(): void
+    {
+        if (! $this->selectedAppId) {
+            return;
+        }
+
+        $currentContainers = Container::where('application_id', $this->selectedAppId)
+            ->get(['id', 'name', 'status']);
+
+        $currentStatuses = $currentContainers->pluck('status', 'id')->toArray();
+
+        foreach ($currentStatuses as $containerId => $status) {
+            $previous = $this->previousContainerStatuses[$containerId] ?? null;
+
+            if ($previous !== null && $previous === 'running' && $status !== 'running') {
+                $containerName = $currentContainers->firstWhere('id', $containerId)?->name ?? substr($containerId, 0, 8);
+
+                Notification::make()
+                    ->warning()
+                    ->title('Container parou')
+                    ->body("Container {$containerName} mudou para {$status}")
+                    ->send();
+            }
+        }
+
+        $this->previousContainerStatuses = $currentStatuses;
     }
 }
 
