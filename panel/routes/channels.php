@@ -3,8 +3,9 @@
 use Illuminate\Support\Facades\Broadcast;
 
 // broadcasting/auth precisa do grupo 'web' para StartSession (leitura da sessão/usuário)
+// BroadcastController retorna 403 diretamente se não autenticado — auth:web não é necessário
 // CSRF excluído em bootstrap/app.php pois pusher-js não envia X-XSRF-TOKEN
-Broadcast::routes(['middleware' => ['web', 'auth:web']]);
+Broadcast::routes(['middleware' => ['web']]);
 
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return $user->id === $id;
