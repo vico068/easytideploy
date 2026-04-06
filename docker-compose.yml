@@ -379,6 +379,7 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       QUEUE_CONNECTION: redis
+      BROADCAST_CONNECTION: reverb
       EASYDEPLOY_ORCHESTRATOR_URL: http://orchestrator:8080
       EASYDEPLOY_API_KEY: ${API_KEY:-easydeploy_api_key_dev}
     volumes:
