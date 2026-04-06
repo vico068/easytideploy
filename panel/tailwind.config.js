@@ -20,6 +20,21 @@ export default {
         'animate-pulse', 'animate-building', 'animate-fade-in-up',
         // Stagger delays
         'stagger-1', 'stagger-2', 'stagger-3', 'stagger-4', 'stagger-5', 'stagger-6',
+        // Deployment logs terminal - text colors (usadas dinamicamente em Alpine.js)
+        'text-red-400', 'text-amber-400', 'text-sky-300', 'text-emerald-400', 'text-slate-300',
+        'text-sky-400', 'text-slate-400', 'text-slate-500', 'text-slate-600', 'text-slate-700',
+        'text-sky-500', 'text-purple-400', 'text-emerald-500',
+        // Deployment logs terminal - background colors
+        'bg-sky-500/15', 'bg-amber-500/15', 'bg-purple-500/15', 'bg-emerald-500/15', 'bg-slate-800',
+        'bg-sky-500/10', 'bg-amber-500/10', 'bg-emerald-500/10', 'bg-red-500/10', 'bg-slate-700/50',
+        'bg-sky-500/20', 'bg-slate-800',
+        // Deployment logs terminal - border colors
+        'border-sky-500/30', 'border-amber-500/30', 'border-emerald-500/30', 'border-red-500/30',
+        'border-slate-600/50', 'border-sky-500/50', 'border-emerald-500/50', 'border-slate-700',
+        // Deployment logs terminal - ring
+        'ring-2', 'ring-sky-500/15',
+        // Font weight
+        'font-semibold',
     ],
     theme: {
         extend: {

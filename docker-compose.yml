@@ -195,6 +195,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-easydeploy_dev}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       CACHE_STORE: redis
       SESSION_DRIVER: redis
       QUEUE_CONNECTION: redis
@@ -247,6 +248,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-easydeploy_dev}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       QUEUE_CONNECTION: redis
       EASYDEPLOY_ORCHESTRATOR_URL: http://orchestrator:8080
       EASYDEPLOY_API_KEY: ${API_KEY:-easydeploy_api_key_dev}
@@ -292,6 +294,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-easydeploy_dev}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       QUEUE_CONNECTION: redis
       BROADCAST_CONNECTION: reverb
       REVERB_APP_ID: ${REVERB_APP_ID:-easydeploy}
@@ -328,6 +331,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-easydeploy_dev}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       QUEUE_CONNECTION: redis
       BROADCAST_CONNECTION: reverb
       REVERB_APP_ID: ${REVERB_APP_ID:-easydeploy}
@@ -373,6 +377,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-easydeploy_dev}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       QUEUE_CONNECTION: redis
       EASYDEPLOY_ORCHESTRATOR_URL: http://orchestrator:8080
       EASYDEPLOY_API_KEY: ${API_KEY:-easydeploy_api_key_dev}
