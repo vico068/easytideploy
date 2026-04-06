@@ -77,6 +77,18 @@ COPY . .
 # Copy built assets from frontend stage
 COPY --from=frontend /app/public/build ./public/build
 
+# Provide dummy env vars so artisan commands work during build
+ENV APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
+    REVERB_APP_ID=build \
+    REVERB_APP_KEY=build \
+    REVERB_APP_SECRET=build \
+    BROADCAST_CONNECTION=log \
+    DB_CONNECTION=sqlite \
+    DB_DATABASE=/tmp/build.sqlite \
+    SESSION_DRIVER=file \
+    CACHE_STORE=file \
+    QUEUE_CONNECTION=sync
+
 RUN composer dump-autoload --optimize
 
 # Publish Livewire assets (required for forms to work)
