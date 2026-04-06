@@ -10,6 +10,7 @@ use App\Events\DeploymentStarted;
 use App\Jobs\ListenDeploymentLogs;
 use App\Models\Application;
 use App\Models\Deployment;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
 
 class DeploymentService
@@ -33,6 +34,11 @@ class DeploymentService
         // Dispatch event
         event(new DeploymentStarted($deployment));
 
+        // Inicia o listener de logs ANTES de chamar o orquestrador para evitar
+        // race condition: garante que o worker já esteja inscrito no Redis Pub/Sub
+        // antes do orquestrador começar a publicar eventos
+        ListenDeploymentLogs::dispatch($deployment->id)->onQueue('deploy-logs');
+
         // Call orchestrator
         try {
             $callbackUrl = url('/api/internal/deployments/' . $deployment->id . '/status');
@@ -41,11 +47,17 @@ class DeploymentService
             $deployment->update([
                 'image_tag' => $result['image_tag'] ?? null,
             ]);
-
-            // Start listening to Redis Pub/Sub and broadcasting to WebSocket
-            ListenDeploymentLogs::dispatch($deployment->id)->onQueue('deploy-logs');
         } catch (\Exception $e) {
             $this->markAsFailed($deployment, $e->getMessage());
+
+            // Sinaliza o ListenDeploymentLogs para terminar imediatamente
+            // (sem isso ficaria travado aguardando por até 600s)
+            Redis::publish('deploy-logs:' . $deployment->id, json_encode([
+                'type'   => 'status',
+                'status' => 'failed',
+                'error'  => $e->getMessage(),
+                'ts'     => now()->toIso8601String(),
+            ]));
         }
 
         return $deployment;
