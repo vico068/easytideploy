@@ -17,8 +17,8 @@ class DeploymentLogsController extends Controller
      */
     public function stream(Request $request, Deployment $deployment): StreamedResponse
     {
-        // Check authorization - user must own the application
-        $user = $request->user();
+        // Check authorization via Filament's auth guard
+        $user = $request->user() ?? auth()->user();
         if (! $user || $deployment->application->user_id !== $user->id) {
             abort(403, 'Unauthorized');
         }
