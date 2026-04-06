@@ -61,8 +61,11 @@ class DeploymentsRelationManager extends RelationManager
                 Tables\Actions\Action::make('logs')
                     ->label('Logs')
                     ->icon('heroicon-o-document-text')
-                    ->modalContent(fn ($record) => view('filament.modals.deployment-logs', ['deployment' => $record]))
-                    ->modalWidth('5xl'),
+                    ->modalHeading(fn ($record) => 'Build Logs — ' . ($record->short_commit_sha ?? $record->id))
+                    ->modalContent(fn ($record) => view('filament.modals.deployment-logs', ['deployment' => $record->load('application')]))
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('Fechar')
+                    ->modalWidth('4xl'),
 
                 Tables\Actions\Action::make('rollback')
                     ->label('Rollback')
