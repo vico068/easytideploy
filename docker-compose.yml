@@ -207,10 +207,10 @@ services:
       REVERB_HOST: reverb
       REVERB_PORT: 9000
       REVERB_SCHEME: http
-      VITE_REVERB_APP_KEY: ${REVERB_APP_KEY:-easydeploy-key}
-      VITE_REVERB_HOST: ${REVERB_PUBLIC_HOST:-deploy.easyti.cloud}
-      VITE_REVERB_PORT: ${REVERB_PUBLIC_PORT:-9001}
-      VITE_REVERB_SCHEME: ${REVERB_PUBLIC_SCHEME:-http}
+      # Public-facing address injected into meta tags for the browser WebSocket connection
+      REVERB_PUBLIC_HOST: ${REVERB_PUBLIC_HOST:-deploy.easyti.cloud}
+      REVERB_PUBLIC_PORT: ${REVERB_PUBLIC_PORT:-9001}
+      REVERB_PUBLIC_SCHEME: ${REVERB_PUBLIC_SCHEME:-https}
     ports:
       - "${PANEL_PORT:-8000}:8000"
     volumes:

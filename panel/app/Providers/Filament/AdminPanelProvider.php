@@ -45,7 +45,19 @@ class AdminPanelProvider extends PanelProvider
             ->renderHook(
                 'panels::head.end',
                 fn (): HtmlString => new HtmlString(
-                    '<link rel="stylesheet" href="' . Vite::asset('resources/css/filament-addon.css') . '">'
+                    '<link rel="stylesheet" href="' . Vite::asset('resources/css/filament-addon.css') . '">' .
+                    // Inject Reverb config as meta tags for runtime access in echo.js
+                    // REVERB_PUBLIC_* are the browser-facing address (not the internal Docker host)
+                    sprintf(
+                        '<meta name="reverb-key" content="%s">' .
+                        '<meta name="reverb-host" content="%s">' .
+                        '<meta name="reverb-port" content="%s">' .
+                        '<meta name="reverb-scheme" content="%s">',
+                        htmlspecialchars(config('reverb.apps.apps.0.key', ''), ENT_QUOTES),
+                        htmlspecialchars(env('REVERB_PUBLIC_HOST', parse_url(config('app.url'), PHP_URL_HOST) ?? 'localhost'), ENT_QUOTES),
+                        htmlspecialchars(env('REVERB_PUBLIC_PORT', '9001'), ENT_QUOTES),
+                        htmlspecialchars(env('REVERB_PUBLIC_SCHEME', 'http'), ENT_QUOTES),
+                    )
                 )
             )
             ->renderHook(
