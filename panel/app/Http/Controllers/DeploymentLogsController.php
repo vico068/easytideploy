@@ -12,8 +12,8 @@ class DeploymentLogsController extends Controller
     /**
      * Stream deployment logs via Server-Sent Events (SSE).
      *
-     * This endpoint provides real-time log streaming by reading directly from
-     * Redis Pub/Sub where the orchestrator publishes logs. No WebSocket needed.
+     * Reads directly from Redis Pub/Sub (phpredis extension).
+     * No WebSocket, no predis — uses php-redis subscribe() callback.
      */
     public function stream(Request $request, Deployment $deployment): StreamedResponse
     {
@@ -29,47 +29,45 @@ class DeploymentLogsController extends Controller
                 ob_end_clean();
             }
 
-            // Set unlimited execution time for this request
+            // Unlimited execution time for long-running builds
             set_time_limit(0);
-
-            // Ignore user abort to clean up properly
             ignore_user_abort(false);
 
             $deploymentId = $deployment->id;
-            $channel = 'deploy-logs:' . $deploymentId;
-            $bufferKey = 'buffer:' . $channel;
+            $channel      = 'deploy-logs:' . $deploymentId;
+            $bufferKey    = 'buffer:' . $channel;
             $terminalStatuses = ['running', 'failed', 'cancelled', 'rolled_back'];
 
-            // Send initial status
+            // Send initial deployment status
             $this->sendEvent('status', [
-                'status' => $deployment->status->value,
+                'status'     => $deployment->status->value,
                 'isTerminal' => $deployment->status->isTerminal(),
             ]);
 
-            // If deployment is already terminal, send existing logs and exit
+            // Already finished — replay logs from DB and close
             if ($deployment->status->isTerminal()) {
-                // Send existing logs from database
                 if ($deployment->build_logs) {
-                    $lines = array_filter(explode("\n", $deployment->build_logs));
-                    foreach ($lines as $line) {
+                    foreach (array_filter(explode("\n", $deployment->build_logs)) as $line) {
                         $this->sendEvent('log', [
-                            'line' => trim($line),
+                            'line'  => trim($line),
                             'stage' => 'build',
-                            'ts' => now()->toIso8601String(),
+                            'ts'    => now()->toIso8601String(),
                         ]);
                     }
                 }
                 $this->sendEvent('done', ['reason' => 'terminal_status']);
+
                 return;
             }
 
+            /** @var \Redis $redis */
             $redis = Redis::connection()->client();
 
-            // Track which messages we've sent to avoid duplicates
-            $processedCount = 0;
-
-            // First, send buffered messages (avoids race condition)
-            $buffered = $redis->lRange($bufferKey, 0, -1);
+            // ----------------------------------------------------------------
+            // 1. Replay buffered messages published before we subscribed
+            //    (avoids race condition where build finishes before client connects)
+            // ----------------------------------------------------------------
+            $buffered  = $redis->lRange($bufferKey, 0, -1);
             $shouldExit = false;
 
             foreach ($buffered as $raw) {
@@ -83,100 +81,106 @@ class DeploymentLogsController extends Controller
                 }
 
                 $shouldExit = $this->processAndSendPayload($payload, $terminalStatuses);
-                $processedCount++;
-
                 if ($shouldExit) {
                     break;
                 }
             }
 
-            // If terminal status found in buffer, exit
             if ($shouldExit) {
                 $this->sendEvent('done', ['reason' => 'terminal_status']);
+
                 return;
             }
 
-            // Send a heartbeat to confirm connection is working
+            // Confirm we are live
             $this->sendEvent('heartbeat', ['ts' => now()->toIso8601String()]);
 
-            // Now listen for new messages via Pub/Sub
-            $pubsub = $redis->pubSubLoop();
-            $pubsub->subscribe($channel);
-
-            // Set a timeout for the subscription (10 minutes max)
-            $startTime = time();
+            // ----------------------------------------------------------------
+            // 2. Live Pub/Sub  — phpredis subscribe() blocks until callback
+            //    calls unsubscribe() or the connection times out.
+            // ----------------------------------------------------------------
             $maxDuration = 600; // 10 minutes
-            $lastHeartbeat = time();
+            $startTime   = time();
 
-            foreach ($pubsub as $message) {
-                // Check for connection abort
-                if (connection_aborted()) {
-                    break;
-                }
+            // Allow the blocking subscribe call to run for up to $maxDuration seconds.
+            // OPT_READ_TIMEOUT = -1 means "block forever"; we control abort manually.
+            $redis->setOption(\Redis::OPT_READ_TIMEOUT, -1);
 
-                // Check timeout
-                $elapsed = time() - $startTime;
-                if ($elapsed > $maxDuration) {
-                    $this->sendEvent('timeout', ['reason' => 'max_duration_exceeded']);
-                    break;
-                }
+            $ctrl = $this; // capture for use inside closure
 
-                // Send periodic heartbeat every 30 seconds
-                if ((time() - $lastHeartbeat) >= 30) {
-                    $this->sendEvent('heartbeat', ['ts' => now()->toIso8601String()]);
-                    $lastHeartbeat = time();
-                }
+            try {
+                $redis->subscribe(
+                    [$channel],
+                    function (\Redis $r, string $chan, string $message) use (
+                        $ctrl,
+                        $terminalStatuses,
+                        $startTime,
+                        $maxDuration
+                    ) {
+                        if (connection_aborted()) {
+                            $r->unsubscribe();
 
-                if ($message->kind !== 'message') {
-                    continue;
-                }
+                            return;
+                        }
 
-                $payload = json_decode($message->payload, true);
-                if (! is_array($payload)) {
-                    continue;
-                }
+                        if ((time() - $startTime) > $maxDuration) {
+                            $ctrl->sendEvent('timeout', ['reason' => 'max_duration_exceeded']);
+                            $r->unsubscribe();
 
-                $shouldExit = $this->processAndSendPayload($payload, $terminalStatuses);
-                if ($shouldExit) {
-                    break;
-                }
+                            return;
+                        }
+
+                        $payload = json_decode($message, true);
+                        if (! is_array($payload)) {
+                            return;
+                        }
+
+                        $exit = $ctrl->processAndSendPayload($payload, $terminalStatuses);
+                        if ($exit) {
+                            $r->unsubscribe();
+                        }
+                    }
+                );
+            } catch (\Throwable) {
+                // Connection closed by client or network error — normal exit path
             }
 
-            unset($pubsub);
             $this->sendEvent('done', ['reason' => 'stream_ended']);
         }, 200, [
-            'Content-Type' => 'text/event-stream',
-            'Cache-Control' => 'no-cache',
-            'Connection' => 'keep-alive',
-            'X-Accel-Buffering' => 'no', // Disable nginx buffering
+            'Content-Type'     => 'text/event-stream',
+            'Cache-Control'    => 'no-cache',
+            'Connection'       => 'keep-alive',
+            'X-Accel-Buffering' => 'no',
         ]);
     }
 
     /**
-     * Process payload and send appropriate SSE event.
+     * Process a single Pub/Sub payload and emit the matching SSE event.
+     *
+     * Returns true if the stream should terminate (terminal status received).
+     *
+     * @param  array<string,mixed>  $payload
+     * @param  string[]             $terminalStatuses
      */
-    private function processAndSendPayload(array $payload, array $terminalStatuses): bool
+    public function processAndSendPayload(array $payload, array $terminalStatuses): bool
     {
         $type = $payload['type'] ?? 'log';
 
         match ($type) {
             'log' => $this->sendEvent('log', [
-                'line' => $payload['line'] ?? '',
+                'line'  => $payload['line'] ?? '',
                 'stage' => $payload['stage'] ?? 'build',
-                'ts' => $payload['ts'] ?? now()->toIso8601String(),
+                'ts'    => $payload['ts'] ?? now()->toIso8601String(),
             ]),
-
             'stage' => $this->sendEvent('stage', [
-                'stage' => $payload['stage'] ?? '',
+                'stage'  => $payload['stage'] ?? '',
                 'status' => $payload['status'] ?? '',
-                'ts' => $payload['ts'] ?? now()->toIso8601String(),
+                'ts'     => $payload['ts'] ?? now()->toIso8601String(),
             ]),
-
             'status' => $this->sendEvent('status', [
                 'status' => $payload['status'] ?? '',
-                'error' => $payload['error'] ?? null,
+                'error'  => $payload['error'] ?? null,
             ]),
-
             default => null,
         };
 
@@ -184,14 +188,14 @@ class DeploymentLogsController extends Controller
     }
 
     /**
-     * Send a Server-Sent Event.
+     * Emit a single Server-Sent Event frame and flush.
+     *
+     * @param  array<string,mixed>  $data
      */
-    private function sendEvent(string $event, array $data): void
+    public function sendEvent(string $event, array $data): void
     {
         echo "event: {$event}\n";
         echo 'data: ' . json_encode($data) . "\n\n";
-
-        // Flush output
         flush();
     }
 }
