@@ -76,10 +76,10 @@ Ambos os serviços precisam ser rebuilded e restartados:
 
 ```bash
 # Servidor de controle (orchestrator)
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && git pull && docker compose build orchestrator && docker compose up -d orchestrator"
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && git pull && docker compose build orchestrator && docker compose up -d orchestrator"
 
 # Servidor worker (agent)
-sshpass -p 'EasyTI@2026' ssh root@177.85.77.175 "cd /opt/easydeploy && git pull && docker compose build agent && docker compose up -d agent"
+sshpass -p 'Nutertools@159' ssh root@177.85.77.175 "cd /opt/easydeploy && git pull && docker compose build agent && docker compose up -d agent"
 ```
 
 ### Armadilhas

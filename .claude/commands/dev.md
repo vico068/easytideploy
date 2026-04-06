@@ -12,13 +12,13 @@ Contexto do projeto:
 | **Controle** | `deploy.easyti.cloud` | Panel, Orchestrator, Queue Workers | `/opt/easydeploy/` |
 | **Worker** | `177.85.77.175` | Agent (executa containers) | `/opt/easydeploy-agent/` |
 
-Acesso: usuário `root`, senha `EasyTI@2026` — usar `sshpass`:
+Acesso: usuário `root`, senha `Nutertools@159` — usar `sshpass`:
 ```bash
 # Servidor de controle (panel + orchestrator + workers)
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud
 
 # Servidor worker (agent)
-sshpass -p 'EasyTI@2026' ssh root@177.85.77.175
+sshpass -p 'Nutertools@159' ssh root@177.85.77.175
 ```
 
 O usuário pediu ajuda com: $ARGUMENTS
@@ -267,7 +267,7 @@ Tipos de commit: `feat`, `fix`, `refactor`, `chore`, `docs`
 ### 4. Conectar ao servidor de controle
 
 ```bash
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud
 cd /opt/easydeploy
 ```
 
@@ -294,7 +294,7 @@ docker compose up -d orchestrator
 ```bash
 # No servidor de controle: apenas push do código já basta
 # Conectar no worker e rebuildar:
-sshpass -p 'EasyTI@2026' ssh root@177.85.77.175 "cd /opt/easydeploy && git pull origin main && docker compose build agent && docker compose up -d agent"
+sshpass -p 'Nutertools@159' ssh root@177.85.77.175 "cd /opt/easydeploy && git pull origin main && docker compose build agent && docker compose up -d agent"
 ```
 
 **Panel com mudança de dependência (composer/npm):**

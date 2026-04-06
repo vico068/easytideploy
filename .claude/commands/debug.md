@@ -25,11 +25,11 @@ Para cada serviço envolvido, verificar os logs recentes:
 
 ```bash
 # No servidor (deploy.easyti.cloud):
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose logs --tail=50 <servico>"
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose logs --tail=50 <servico>"
 
 # Serviços: panel, queue-worker, orchestrator, traefik, postgres, redis
 # No worker (177.85.77.175):
-sshpass -p 'EasyTI@2026' ssh root@177.85.77.175 "cd /opt/easydeploy && docker compose logs --tail=50 agent"
+sshpass -p 'Nutertools@159' ssh root@177.85.77.175 "cd /opt/easydeploy && docker compose logs --tail=50 agent"
 ```
 
 ### 3. Rastrear o Fluxo
@@ -57,7 +57,7 @@ Consultar estado atual dos registros relevantes:
 
 ```bash
 # No servidor de controle:
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose exec postgres psql -U easydeploy -c \"
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose exec postgres psql -U easydeploy -c \"
   SELECT d.id, d.status, d.error_message, d.created_at
   FROM deployments d ORDER BY d.created_at DESC LIMIT 5;
 \""

@@ -36,52 +36,52 @@ git push origin main
 ### 3. Deploy no Servidor de Controle (deploy.easyti.cloud)
 
 ```bash
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && git pull origin main"
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && git pull origin main"
 ```
 
 Depois, conforme o que mudou:
 
 **Apenas Panel (PHP):**
 ```bash
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose restart panel queue-worker"
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose restart panel queue-worker"
 ```
 
 **Orchestrator (Go — requer rebuild):**
 ```bash
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose build orchestrator && docker compose up -d orchestrator"
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose build orchestrator && docker compose up -d orchestrator"
 ```
 
 **Tudo:**
 ```bash
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose build && docker compose up -d"
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose build && docker compose up -d"
 ```
 
 ### 4. Deploy no Worker (177.85.77.175) — se agent mudou
 
 ```bash
-sshpass -p 'EasyTI@2026' ssh root@177.85.77.175 "cd /opt/easydeploy && git pull origin main && docker compose build agent && docker compose up -d agent"
+sshpass -p 'Nutertools@159' ssh root@177.85.77.175 "cd /opt/easydeploy && git pull origin main && docker compose build agent && docker compose up -d agent"
 ```
 
 ### 5. Pós-deploy
 
 Se houver migrations:
 ```bash
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose exec panel php artisan migrate --force"
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose exec panel php artisan migrate --force"
 ```
 
 Limpar cache Laravel se mudou config/rotas:
 ```bash
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose exec panel php artisan config:clear && docker compose exec panel php artisan route:clear && docker compose exec panel php artisan cache:clear"
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose exec panel php artisan config:clear && docker compose exec panel php artisan route:clear && docker compose exec panel php artisan cache:clear"
 ```
 
 ### 6. Verificar
 
 ```bash
 # Checar se todos os containers estão rodando
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose ps"
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose ps"
 
 # Verificar logs por erros
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose logs --tail=20 orchestrator queue-worker panel"
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose logs --tail=20 orchestrator queue-worker panel"
 ```
 
 ### Regras

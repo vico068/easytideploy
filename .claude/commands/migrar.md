@@ -69,14 +69,14 @@ docker compose exec panel php artisan migrate
 
 ```bash
 # Após push e pull no servidor:
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose exec panel php artisan migrate --force"
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose exec panel php artisan migrate --force"
 ```
 
 ### 7. Verificar
 
 ```bash
 # Confirmar que a migração rodou
-sshpass -p 'EasyTI@2026' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose exec postgres psql -U easydeploy -c '\d <tabela>'"
+sshpass -p 'Nutertools@159' ssh root@deploy.easyti.cloud "cd /opt/easydeploy && docker compose exec postgres psql -U easydeploy -c '\d <tabela>'"
 ```
 
 ### Armadilhas
