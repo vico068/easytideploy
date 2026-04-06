@@ -16,11 +16,11 @@ class UserStatsWidget extends Widget
 
     protected int|string|array $columnSpan = 'full';
 
-    public int $userId = 0;
+    public string $userId = '';
 
     public function mount(): void
     {
-        $this->userId = auth()->id() ?? 0;
+        $this->userId = auth()->id() ?? '';
     }
 
     #[On('echo-private:user.{userId},DeploymentStatusChanged')]

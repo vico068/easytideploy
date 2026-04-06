@@ -18,12 +18,12 @@ class Dashboard extends FilamentDashboard
 
     protected static ?int $navigationSort = -2;
 
-    public int $userId = 0;
+    public string $userId = '';
 
     public function mount(): void
     {
         parent::mount();
-        $this->userId = auth()->id() ?? 0;
+        $this->userId = auth()->id() ?? '';
     }
 
     #[On('echo-private:user.{userId},DeploymentStatusChanged')]

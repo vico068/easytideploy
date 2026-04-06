@@ -16,12 +16,12 @@ class ListApplications extends ListRecords
 
     public string $viewMode = 'cards';
 
-    public int $userId = 0;
+    public string $userId = '';
 
     public function mount(): void
     {
         parent::mount();
-        $this->userId = auth()->id() ?? 0;
+        $this->userId = auth()->id() ?? '';
     }
 
     protected function getHeaderActions(): array
