@@ -11,6 +11,7 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Livewire\Attributes\On;
 
 class MonitoringDashboard extends Page
 {
@@ -402,35 +403,27 @@ class MonitoringDashboard extends Page
 
     public function refreshLogs(): void
     {
-        $this->checkContainerStatusChanges();
+        // Livewire re-renderiza automaticamente
     }
 
-    protected function checkContainerStatusChanges(): void
+    /** Recebe mudanças de status de container em tempo real via WebSocket */
+    #[On('echo-private:application.{selectedAppId},ContainerStatusChanged')]
+    public function onContainerStatusChanged(array $event): void
     {
-        if (! $this->selectedAppId) {
-            return;
+        $containerId = $event['container_id'] ?? '';
+        $name = $event['name'] ?? 'desconhecido';
+        $status = $event['status'] ?? '';
+        $previous = $this->previousContainerStatuses[$containerId] ?? null;
+
+        if ($previous === 'running' && $status !== 'running') {
+            Notification::make()
+                ->warning()
+                ->title('Container parou')
+                ->body("Container {$name} mudou para {$status}")
+                ->send();
         }
 
-        $currentContainers = Container::where('application_id', $this->selectedAppId)
-            ->get(['id', 'name', 'status']);
-
-        $currentStatuses = $currentContainers->pluck('status', 'id')->toArray();
-
-        foreach ($currentStatuses as $containerId => $status) {
-            $previous = $this->previousContainerStatuses[$containerId] ?? null;
-
-            if ($previous !== null && $previous === 'running' && $status !== 'running') {
-                $containerName = $currentContainers->firstWhere('id', $containerId)?->name ?? substr($containerId, 0, 8);
-
-                Notification::make()
-                    ->warning()
-                    ->title('Container parou')
-                    ->body("Container {$containerName} mudou para {$status}")
-                    ->send();
-            }
-        }
-
-        $this->previousContainerStatuses = $currentStatuses;
+        $this->previousContainerStatuses[$containerId] = $status;
     }
 }
 

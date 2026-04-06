@@ -200,6 +200,17 @@ services:
       QUEUE_CONNECTION: redis
       EASYDEPLOY_ORCHESTRATOR_URL: http://orchestrator:8080
       EASYDEPLOY_API_KEY: ${API_KEY:-easydeploy_api_key_dev}
+      BROADCAST_CONNECTION: reverb
+      REVERB_APP_ID: ${REVERB_APP_ID:-easydeploy}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-easydeploy-key}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-easydeploy-secret}
+      REVERB_HOST: reverb
+      REVERB_PORT: 9000
+      REVERB_SCHEME: http
+      VITE_REVERB_APP_KEY: ${REVERB_APP_KEY:-easydeploy-key}
+      VITE_REVERB_HOST: ${REVERB_PUBLIC_HOST:-deploy.easyti.cloud}
+      VITE_REVERB_PORT: ${REVERB_PUBLIC_PORT:-9001}
+      VITE_REVERB_SCHEME: ${REVERB_PUBLIC_SCHEME:-http}
     ports:
       - "${PANEL_PORT:-8000}:8000"
     volumes:
@@ -239,6 +250,94 @@ services:
       QUEUE_CONNECTION: redis
       EASYDEPLOY_ORCHESTRATOR_URL: http://orchestrator:8080
       EASYDEPLOY_API_KEY: ${API_KEY:-easydeploy_api_key_dev}
+      BROADCAST_CONNECTION: reverb
+      REVERB_APP_ID: ${REVERB_APP_ID:-easydeploy}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-easydeploy-key}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-easydeploy-secret}
+      REVERB_HOST: reverb
+      REVERB_PORT: 9000
+      REVERB_SCHEME: http
+    volumes:
+      - ./panel/app:/var/www/html/app
+      - ./panel/config:/var/www/html/config
+      - ./panel/database:/var/www/html/database
+      - ./panel/resources:/var/www/html/resources
+      - ./panel/routes:/var/www/html/routes
+      - ./panel/bootstrap:/var/www/html/bootstrap
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - easydeploy
+
+  # Reverb WebSocket Server
+  reverb:
+    build:
+      context: ./panel
+      dockerfile: Dockerfile
+    container_name: easydeploy-reverb
+    restart: unless-stopped
+    command: php artisan reverb:start --host=0.0.0.0 --port=9000 --no-interaction
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      APP_KEY: ${APP_KEY:-base64:CHANGE_ME_GENERATE_WITH_ARTISAN}
+      APP_DEBUG: "${APP_DEBUG:-false}"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: easydeploy
+      DB_USERNAME: easydeploy
+      DB_PASSWORD: ${DB_PASSWORD:-easydeploy_dev}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      QUEUE_CONNECTION: redis
+      BROADCAST_CONNECTION: reverb
+      REVERB_APP_ID: ${REVERB_APP_ID:-easydeploy}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-easydeploy-key}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-easydeploy-secret}
+      REVERB_HOST: 0.0.0.0
+      REVERB_PORT: 9000
+      REVERB_SCHEME: http
+      EASYDEPLOY_API_KEY: ${API_KEY:-easydeploy_api_key_dev}
+    ports:
+      - "${REVERB_PORT:-9001}:9000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - easydeploy
+
+  # Queue Worker for deploy-logs (long-running Redis subscriber → WebSocket bridge)
+  queue-worker-logs:
+    build:
+      context: ./panel
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: php artisan queue:work redis --queue=deploy-logs --sleep=3 --tries=1 --timeout=600 --no-interaction
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      APP_KEY: ${APP_KEY:-base64:CHANGE_ME_GENERATE_WITH_ARTISAN}
+      APP_DEBUG: "${APP_DEBUG:-false}"
+      DB_CONNECTION: pgsql
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: easydeploy
+      DB_USERNAME: easydeploy
+      DB_PASSWORD: ${DB_PASSWORD:-easydeploy_dev}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      QUEUE_CONNECTION: redis
+      BROADCAST_CONNECTION: reverb
+      REVERB_APP_ID: ${REVERB_APP_ID:-easydeploy}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-easydeploy-key}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-easydeploy-secret}
+      REVERB_HOST: reverb
+      REVERB_PORT: 9000
+      REVERB_SCHEME: http
+      EASYDEPLOY_API_KEY: ${API_KEY:-easydeploy_api_key_dev}
+      EASYDEPLOY_ORCHESTRATOR_URL: http://orchestrator:8080
     volumes:
       - ./panel/app:/var/www/html/app
       - ./panel/config:/var/www/html/config

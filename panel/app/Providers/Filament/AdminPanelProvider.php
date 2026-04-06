@@ -49,6 +49,12 @@ class AdminPanelProvider extends PanelProvider
                 )
             )
             ->renderHook(
+                'panels::scripts.after',
+                fn (): HtmlString => new HtmlString(
+                    '<script type="module" src="' . Vite::asset('resources/js/app.js') . '"></script>'
+                )
+            )
+            ->renderHook(
                 'panels::sidebar.footer',
                 fn (): HtmlString => new HtmlString(
                     '<div class="px-4 py-3" style="border-top: 1px solid rgba(255,255,255,0.06);">

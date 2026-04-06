@@ -1,7 +1,8 @@
 <x-filament-panels::page>
 <div
     class="space-y-6"
-    @deployment-finished.window="$wire.set('isActive', false)"
+    @deployment-finished.window="finished = true"
+    x-data="{ finished: false }"
 >
     {{-- ============================================================
          HEADER: info do deployment + badge de status
@@ -12,13 +13,13 @@
                 <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
                     {{ $deployment->application->name ?? 'Aplicação' }}
                 </h1>
-                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold
+                <span wire:key="status-badge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold
                     {{ $deployment->status->getColor() === 'success' ? 'bg-emerald-500/15 text-emerald-400' :
                        ($deployment->status->getColor() === 'warning' ? 'bg-amber-500/15 text-amber-400' :
                        ($deployment->status->getColor() === 'info' ? 'bg-sky-500/15 text-sky-400' :
                        ($deployment->status->getColor() === 'danger' ? 'bg-red-500/15 text-red-400' :
                        'bg-slate-500/15 text-slate-400'))) }}">
-                    @if($isActive)
+                    @if($deployment->isActive())
                         <span class="inline-block w-1.5 h-1.5 rounded-full animate-pulse
                             {{ $deployment->status->getColor() === 'warning' ? 'bg-amber-400' :
                                ($deployment->status->getColor() === 'info' ? 'bg-sky-400' : 'bg-slate-400') }}">
@@ -57,13 +58,12 @@
                 push:   'pending',
                 deploy: 'pending',
             },
-            updateStage(stage, status) {
-                if (this.stages[stage] !== undefined) {
-                    this.stages[stage] = status;
-                }
-            }
         }"
-        @stage-update.window="updateStage($event.detail.stage, $event.detail.status)"
+        @stage-update.window="
+            if (stages[$event.detail.stage] !== undefined) {
+                stages[$event.detail.stage] = $event.detail.status;
+            }
+        "
         class="bg-white dark:bg-slate-900/60 border border-gray-200 dark:border-white/[0.07] rounded-2xl p-6"
     >
         <div class="flex items-center justify-between gap-2">
@@ -76,7 +76,6 @@
                 <div class="flex flex-col items-center gap-2 flex-1"
                      x-data="{ key: '{{ $step['key'] }}' }"
                 >
-                    {{-- Ícone de status --}}
                     <div class="relative">
                         {{-- pending --}}
                         <div x-show="stages[key] === 'pending'"
@@ -126,16 +125,40 @@
     </div>
 
     {{-- ============================================================
-         TERMINAL: logs de build em tempo real via SSE
+         TERMINAL: logs de build em tempo real via WebSocket
     ============================================================ --}}
     <div
-        x-data="deploymentLogs(
-            '{{ $deploymentId }}',
-            '{{ config('easydeploy.orchestrator_api_key') }}',
-            '{{ url('') }}'
-        )"
-        x-init="connect()"
-        @stage-update.window="$dispatch('stage-update', $event.detail)"
+        x-data="{
+            lines: [],
+            lineCount: 0,
+
+            init() {
+                // Recebe linhas de log do Livewire (que recebe do WebSocket via #[On])
+                $wire.on('build-log-received', (data) => {
+                    this.addLine(data.line || '');
+                });
+
+                // Quando deploy terminar, atualizar indicador
+                $wire.on('deployment-finished', () => {
+                    $dispatch('deployment-finished');
+                });
+            },
+
+            addLine(content) {
+                if (content === '' && this.lines.length === 0) return;
+                this.lines.push({ id: this.lineCount++, content });
+
+                // Manter máximo 2000 linhas
+                if (this.lines.length > 2000) {
+                    this.lines.splice(0, this.lines.length - 2000);
+                }
+
+                this.\$nextTick(() => {
+                    const el = this.\$refs.logContainer;
+                    if (el) el.scrollTop = el.scrollHeight;
+                });
+            }
+        }"
     >
         <div class="bg-slate-900 rounded-2xl border border-slate-700/50 overflow-hidden
                     shadow-2xl shadow-slate-900/50">
@@ -149,8 +172,8 @@
                 </div>
                 <span class="text-slate-400 text-sm font-medium flex-1">Build Logs</span>
 
-                {{-- Indicador ao vivo --}}
-                <div x-show="connected && !finished"
+                {{-- Indicador WebSocket ao vivo --}}
+                <div x-show="!finished"
                      class="flex items-center gap-1.5 text-xs text-emerald-400">
                     <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
                     ao vivo
@@ -159,11 +182,6 @@
                      class="flex items-center gap-1.5 text-xs text-slate-500">
                     <span class="inline-block w-1.5 h-1.5 rounded-full bg-slate-500"></span>
                     concluído
-                </div>
-                <div x-show="!connected && !finished"
-                     class="flex items-center gap-1.5 text-xs text-amber-400">
-                    <span class="inline-block w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                    conectando...
                 </div>
             </div>
 
@@ -174,8 +192,8 @@
                        scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent"
                 style="line-height: 1.6;"
             >
-                <template x-if="lines.length === 0 && !connected">
-                    <div class="text-slate-500 italic">Aguardando conexão...</div>
+                <template x-if="lines.length === 0">
+                    <div class="text-slate-500 italic">Aguardando logs via WebSocket...</div>
                 </template>
 
                 <template x-for="line in lines" :key="line.id">
@@ -193,84 +211,17 @@
             </div>
         </div>
     </div>
+
+    {{-- Logs históricos para deployments terminais (carregados do banco) --}}
+    @if($deployment->isTerminal() && $deployment->build_logs)
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                // Para deployments já concluídos, preencher o terminal com logs do banco
+                const lines = @json(explode("\n", $deployment->build_logs));
+                // Usar evento customizado para preencher o terminal após Alpine inicializar
+                document.dispatchEvent(new CustomEvent('load-historical-logs', { detail: { lines } }));
+            });
+        </script>
+    @endif
 </div>
-
-{{-- Livewire polling: 2s enquanto ativo, para quando concluído --}}
-@if($isActive)
-    <div wire:poll.2000ms="refreshStatus"></div>
-@endif
-
-<script>
-function deploymentLogs(deploymentId, apiKey, panelUrl) {
-    return {
-        lines: [],
-        connected: false,
-        finished: false,
-        lineCount: 0,
-        es: null,
-
-        connect() {
-            const url = `${panelUrl}/api/internal/deployments/${deploymentId}/build-logs/stream?api_key=${encodeURIComponent(apiKey)}`;
-            this.es = new EventSource(url);
-
-            this.es.addEventListener('open', () => {
-                this.connected = true;
-            });
-
-            this.es.addEventListener('log', (e) => {
-                const data = JSON.parse(e.data);
-                this.addLine(data.line || '');
-            });
-
-            this.es.addEventListener('stage', (e) => {
-                const data = JSON.parse(e.data);
-                this.$dispatch('stage-update', { stage: data.stage, status: data.status });
-            });
-
-            this.es.addEventListener('status', (e) => {
-                const data = JSON.parse(e.data);
-                // status event is handled by Livewire poll
-            });
-
-            this.es.addEventListener('done', () => {
-                this.connected = false;
-                this.finished = true;
-                if (this.es) {
-                    this.es.close();
-                    this.es = null;
-                }
-            });
-
-            this.es.onerror = () => {
-                this.connected = false;
-                if (this.finished) return;
-                // Retry after 3 seconds
-                if (this.es) {
-                    this.es.close();
-                    this.es = null;
-                }
-                setTimeout(() => {
-                    if (!this.finished) this.connect();
-                }, 3000);
-            };
-        },
-
-        addLine(content) {
-            if (!content && this.lines.length > 0) return; // skip empty lines at start
-            this.lines.push({ id: this.lineCount++, content });
-
-            // Keep max 2000 lines to avoid DOM bloat
-            if (this.lines.length > 2000) {
-                this.lines.splice(0, this.lines.length - 2000);
-            }
-
-            // Auto-scroll to bottom
-            this.$nextTick(() => {
-                const el = this.$refs.logContainer;
-                if (el) el.scrollTop = el.scrollHeight;
-            });
-        }
-    };
-}
-</script>
 </x-filament-panels::page>

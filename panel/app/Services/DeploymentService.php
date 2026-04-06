@@ -7,6 +7,7 @@ use App\Enums\DeploymentStatus;
 use App\Events\DeploymentCompleted;
 use App\Events\DeploymentFailed;
 use App\Events\DeploymentStarted;
+use App\Jobs\ListenDeploymentLogs;
 use App\Models\Application;
 use App\Models\Deployment;
 use Illuminate\Support\Str;
@@ -40,6 +41,9 @@ class DeploymentService
             $deployment->update([
                 'image_tag' => $result['image_tag'] ?? null,
             ]);
+
+            // Start listening to Redis Pub/Sub and broadcasting to WebSocket
+            ListenDeploymentLogs::dispatch($deployment->id)->onQueue('deploy-logs');
         } catch (\Exception $e) {
             $this->markAsFailed($deployment, $e->getMessage());
         }
