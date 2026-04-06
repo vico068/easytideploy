@@ -21,6 +21,10 @@ return Application::configure(basePath: dirname(__DIR__))
                      Request::HEADER_X_FORWARDED_PORT |
                      Request::HEADER_X_FORWARDED_PROTO
         );
+
+        // broadcasting/auth usa autenticação por sessão — CSRF não se aplica
+        // pois pusher-js não envia o token XSRF por padrão
+        $middleware->validateCsrfTokens(except: ['broadcasting/auth']);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

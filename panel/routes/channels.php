@@ -2,8 +2,9 @@
 
 use Illuminate\Support\Facades\Broadcast;
 
-// Registrar rotas de broadcasting sem CSRF (sessão web é suficiente para autenticação)
-Broadcast::routes(['middleware' => ['auth:web']]);
+// broadcasting/auth precisa do grupo 'web' para StartSession (leitura da sessão/usuário)
+// CSRF excluído em bootstrap/app.php pois pusher-js não envia X-XSRF-TOKEN
+Broadcast::routes(['middleware' => ['web', 'auth:web']]);
 
 Broadcast::channel('App.Models.User.{id}', function ($user, $id) {
     return $user->id === $id;
