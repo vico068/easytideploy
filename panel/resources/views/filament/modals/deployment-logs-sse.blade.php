@@ -3,6 +3,7 @@
     $isTerminal   = $deployment->status->isTerminal();
     $statusValue  = $deployment->status->value;
     $initialLogs  = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', (string) ($deployment->build_logs ?? '')))));
+    $logsUrl      = route('deployments.logs.show', $deployment);
 @endphp
 
 {{-- Componente Alpine registrado em public/js/deployment-logs.js via alpine:init --}}
@@ -93,7 +94,8 @@
          '{{ $deploymentId }}',
          {{ $isTerminal ? 'true' : 'false' }},
          '{{ $statusValue }}',
-         @js($initialLogs)
+         @js($initialLogs),
+         '{{ $logsUrl }}'
      )"
      x-on:remove.window="cleanup()">
 

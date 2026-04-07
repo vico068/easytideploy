@@ -9,6 +9,20 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DeploymentLogsController extends Controller
 {
+    public function show(Request $request, Deployment $deployment)
+    {
+        $user = $request->user() ?? auth()->user();
+        if (! $user || $deployment->application->user_id !== $user->id) {
+            abort(403, 'Unauthorized');
+        }
+
+        return response()->json([
+            'id' => $deployment->id,
+            'status' => $deployment->status->value,
+            'logs' => $deployment->build_logs ?? '',
+        ]);
+    }
+
     /**
      * Stream deployment logs via Server-Sent Events (SSE).
      *

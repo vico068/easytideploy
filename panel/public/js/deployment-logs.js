@@ -6,10 +6,11 @@
  * qualquer elemento `x-data`, inclusive os injetados via Livewire morphdom.
  */
 document.addEventListener('alpine:init', () => {
-    Alpine.data('deploymentLogs', (deploymentId, isTerminal, initialStatus, initialLogs = []) => ({
+    Alpine.data('deploymentLogs', (deploymentId, isTerminal, initialStatus, initialLogs = [], logsUrl = null) => ({
         deploymentId,
         isTerminal,
         initialLogs,
+        logsUrl,
 
         logCount:      0,
         autoScroll:    true,
@@ -108,6 +109,30 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        addSystemLine(line) {
+            // System lines should always be rendered, even if a similar hash exists.
+            this.logCount++;
+
+            const body   = this.terminalBody();
+            const cursor = document.getElementById('cursor-' + this.deploymentId);
+
+            const el = document.createElement('div');
+            el.className = 'log-line';
+            el.innerHTML =
+                '<span class="log-num">' + this.logCount + '</span>' +
+                '<span class="log-text log-info">' + this.escapeHtml(line) + '</span>';
+
+            if (cursor && cursor.parentNode === body) {
+                body.insertBefore(el, cursor);
+            } else if (body) {
+                body.appendChild(el);
+            }
+
+            if (this.autoScroll && body) {
+                body.scrollTop = body.scrollHeight;
+            }
+        },
+
         updateStatus(status) {
             this.currentStatus = status;
             if (['running', 'failed', 'cancelled', 'rolled_back'].includes(status)) {
@@ -120,6 +145,47 @@ document.addEventListener('alpine:init', () => {
             this.sseState  = 'connected';
             this.sseText   = 'completo';
             this.cleanup();
+
+            if (this.logCount === 0) {
+                this.fetchPersistedLogs();
+            }
+        },
+
+        fetchPersistedLogs() {
+            if (!this.logsUrl) {
+                this.addSystemLine('>>> Nenhum log persistido encontrado para este deploy.');
+                return;
+            }
+
+            fetch(this.logsUrl, {
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            })
+                .then((response) => {
+                    if (!response.ok) {
+                        throw new Error('Nao foi possivel carregar logs persistidos.');
+                    }
+                    return response.json();
+                })
+                .then((payload) => {
+                    const logs = String(payload?.logs || '');
+                    const lines = logs.split(/\r\n|\r|\n/).map((line) => line.trim()).filter(Boolean);
+
+                    if (lines.length === 0) {
+                        this.addSystemLine('>>> Nenhum log persistido encontrado para este deploy.');
+                        return;
+                    }
+
+                    this.addSystemLine('>>> Recuperando logs persistidos...');
+                    for (const line of lines) {
+                        this.addLogLine(line);
+                    }
+                })
+                .catch((error) => {
+                    this.addSystemLine('>>> Falha ao recuperar logs persistidos: ' + error.message);
+                });
         },
 
         connectEcho() {
@@ -145,6 +211,12 @@ document.addEventListener('alpine:init', () => {
                     .listen('.DeploymentStatusChanged', (event) => {
                         if (event?.status) {
                             this.updateStatus(event.status);
+                            this.addSystemLine('>>> STATUS: ' + String(event.status).toUpperCase());
+
+                            if (event?.error) {
+                                this.addSystemLine('>>> ERRO: ' + event.error);
+                            }
+
                             if (['running', 'failed', 'cancelled', 'rolled_back'].includes(event.status)) {
                                 this.finishStream();
                             }

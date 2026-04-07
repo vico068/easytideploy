@@ -11,3 +11,8 @@ Route::get('/', function () {
 Route::get('/deployments/{deployment}/logs/stream', [DeploymentLogsController::class, 'stream'])
     ->middleware(['web'])
     ->name('deployments.logs.stream');
+
+// JSON endpoint for persisted logs fallback in modal realtime component.
+Route::get('/deployments/{deployment}/logs', [DeploymentLogsController::class, 'show'])
+    ->middleware(['web'])
+    ->name('deployments.logs.show');
