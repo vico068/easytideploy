@@ -14,7 +14,7 @@ FROM node:20-alpine AS frontend
 WORKDIR /app
 
 # Reduce peak memory pressure during npm/vite steps.
-ENV NODE_OPTIONS="--max-old-space-size=8192" \
+ENV NODE_OPTIONS="--max-old-space-size=16384" \
     UV_THREADPOOL_SIZE=1 \
     npm_config_jobs=1 \
     npm_config_maxsockets=1
