@@ -49,6 +49,8 @@ document.addEventListener('alpine:init', () => {
                 this.addLogLine(line, false);
             }
 
+            this.scrollToBottom(true);
+
             if (this.finished) {
                 this.sseState = 'connected';
                 this.sseText = 'completo';
@@ -110,8 +112,8 @@ document.addEventListener('alpine:init', () => {
                 body.appendChild(el);
             }
 
-            if (this.autoScroll && body) {
-                body.scrollTop = body.scrollHeight;
+            if (this.autoScroll) {
+                this.scrollToBottom();
             }
         },
 
@@ -134,9 +136,27 @@ document.addEventListener('alpine:init', () => {
                 body.appendChild(el);
             }
 
-            if (this.autoScroll && body) {
-                body.scrollTop = body.scrollHeight;
+            if (this.autoScroll) {
+                this.scrollToBottom();
             }
+        },
+
+        scrollToBottom(immediate = false) {
+            const body = this.terminalBody();
+            if (!body) {
+                return;
+            }
+
+            const run = () => {
+                body.scrollTop = body.scrollHeight;
+            };
+
+            if (immediate) {
+                run();
+                return;
+            }
+
+            requestAnimationFrame(run);
         },
 
         updateStatus(status) {
@@ -189,6 +209,8 @@ document.addEventListener('alpine:init', () => {
                     for (const line of lines) {
                         this.addLogLine(line, false);
                     }
+
+                    this.scrollToBottom(true);
                 })
                 .catch((error) => {
                     this.addSystemLine('>>> Falha ao recuperar logs persistidos: ' + error.message);
