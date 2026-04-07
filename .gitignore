@@ -9,6 +9,10 @@
 .env.*
 !.env.example
 
+# AI assistants (contain sensitive credentials)
+.claude/
+.github/
+
 # IDE
 .idea/
 *.swp
