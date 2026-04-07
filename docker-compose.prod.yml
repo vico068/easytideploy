@@ -105,6 +105,7 @@ services:
       DOCKER_REGISTRY: ${DOCKER_REGISTRY}
       DATA_DIR: /var/lib/easydeploy
       APP_ENV: production
+      GOMEMLIMIT: 48GiB
       ACME_ENABLED: "true"
       ACME_EMAIL: ${ACME_EMAIL}
       ACME_STAGING: "false"
