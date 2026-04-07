@@ -137,8 +137,4 @@
         />
 
     </div>
-
-    @if($app->isDeploying())
-        <div wire:poll.15s="refreshStatus" class="hidden"></div>
-    @endif
 </x-filament-panels::page>

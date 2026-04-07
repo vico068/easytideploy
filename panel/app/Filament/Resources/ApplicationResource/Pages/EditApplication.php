@@ -15,18 +15,24 @@ class EditApplication extends EditRecord
 
     protected static string $view = 'filament.resources.application-resource.pages.edit-application';
 
-    public function getListeners(): array
-    {
-        $appId = $this->record?->id;
-        if (! $appId) {
-            return [];
-        }
+    public string $applicationId = '';
 
-        return [
-            // Echo events para atualização em tempo real
-            "echo-private:application.{$appId},DeploymentStatusChanged" => 'refreshStatus',
-            "echo-private:application.{$appId},ContainerStatusChanged" => 'refreshStatus',
-        ];
+    public function mount(int|string $record): void
+    {
+        parent::mount($record);
+        $this->applicationId = (string) ($this->record?->id ?? '');
+    }
+
+    #[On('echo-private:application.{applicationId},DeploymentStatusChanged')]
+    public function onDeploymentStatusChanged(array $event): void
+    {
+        $this->refreshStatus();
+    }
+
+    #[On('echo-private:application.{applicationId},ContainerStatusChanged')]
+    public function onContainerStatusChanged(array $event): void
+    {
+        $this->refreshStatus();
     }
 
     public function refreshStatus(): void

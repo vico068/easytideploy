@@ -5,11 +5,11 @@ namespace App\Jobs;
 use App\Events\BuildLogReceived;
 use App\Events\DeploymentStageChanged;
 use App\Events\DeploymentStatusChanged;
+use Redis as PhpRedis;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Redis;
 
 class ListenDeploymentLogs implements ShouldQueue
@@ -53,26 +53,46 @@ class ListenDeploymentLogs implements ShouldQueue
         }
 
         // Agora escutar novas mensagens via Pub/Sub
-        $pubsub = $redis->pubSubLoop();
-        $pubsub->subscribe($channel);
+        if ($redis instanceof PhpRedis) {
+            $redis->setOption(PhpRedis::OPT_READ_TIMEOUT, -1);
 
-        foreach ($pubsub as $message) {
-            if ($message->kind !== 'message') {
-                continue;
+            try {
+                $redis->subscribe([$channel], function (PhpRedis $r, string $chan, string $message) use ($terminalStatuses) {
+                    $payload = json_decode($message, true);
+                    if (! is_array($payload)) {
+                        return;
+                    }
+
+                    $shouldExit = $this->processPayload($payload, $terminalStatuses);
+                    if ($shouldExit) {
+                        $r->unsubscribe();
+                    }
+                });
+            } catch (\Throwable) {
+                // Normal when connection closes or worker is stopping.
+            }
+        } elseif (method_exists($redis, 'pubSubLoop')) {
+            $pubsub = $redis->pubSubLoop();
+            $pubsub->subscribe($channel);
+
+            foreach ($pubsub as $message) {
+                if (($message->kind ?? null) !== 'message') {
+                    continue;
+                }
+
+                $payload = json_decode($message->payload ?? '', true);
+                if (! is_array($payload)) {
+                    continue;
+                }
+
+                $shouldExit = $this->processPayload($payload, $terminalStatuses);
+                if ($shouldExit) {
+                    break;
+                }
             }
 
-            $payload = json_decode($message->payload, true);
-            if (! is_array($payload)) {
-                continue;
-            }
-
-            $shouldExit = $this->processPayload($payload, $terminalStatuses);
-            if ($shouldExit) {
-                break;
-            }
+            unset($pubsub);
         }
-
-        unset($pubsub);
 
         // Limpar buffer após conclusão
         $redis->del($bufferKey);
