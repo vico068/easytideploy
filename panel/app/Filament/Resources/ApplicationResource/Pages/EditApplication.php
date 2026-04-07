@@ -39,8 +39,13 @@ class EditApplication extends EditRecord
 
     public function refreshStatus(): void
     {
-        // Recarrega o record do banco para pegar o status atualizado
-        $this->record->refresh();
+        // Recarrega o record e relações usadas no header para refletir o status em tempo real.
+        $this->record = $this->record->fresh([
+            'latestDeployment',
+            'primaryDomain',
+        ]);
+
+        $this->dispatch('$refresh');
     }
 
     protected function getHeaderActions(): array

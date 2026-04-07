@@ -1,5 +1,31 @@
 <x-filament-panels::page>
-    <div class="space-y-6">
+    <div
+        class="space-y-6"
+        wire:poll.5s="refreshStatus"
+        x-data="{
+            channelName: 'application.{{ $this->record->id }}',
+            init() {
+                if (! window.Echo) {
+                    return;
+                }
+
+                window.Echo.private(this.channelName)
+                    .listen('.DeploymentStatusChanged', () => {
+                        this.$wire.refreshStatus();
+                    })
+                    .listen('.ContainerStatusChanged', () => {
+                        this.$wire.refreshStatus();
+                    });
+            },
+            destroy() {
+                if (! window.Echo) {
+                    return;
+                }
+
+                window.Echo.leave(this.channelName);
+            }
+        }"
+    >
 
         {{-- ═══════════════════════════════════════════════════════
              STATUS HEADER — App info + ações rápidas
