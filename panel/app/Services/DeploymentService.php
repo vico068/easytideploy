@@ -10,6 +10,7 @@ use App\Events\DeploymentStarted;
 use App\Jobs\ListenDeploymentLogs;
 use App\Models\Application;
 use App\Models\Deployment;
+use Redis as PhpRedis;
 use Illuminate\Support\Facades\Redis;
 
 class DeploymentService
@@ -49,12 +50,28 @@ class DeploymentService
 
             // Sinaliza o ListenDeploymentLogs para terminar imediatamente
             // (sem isso ficaria travado aguardando por até 600s)
-            Redis::publish('deploy-logs:' . $deployment->id, json_encode([
+            $payload = json_encode([
                 'type'   => 'status',
                 'status' => 'failed',
                 'error'  => $e->getMessage(),
                 'ts'     => now()->toIso8601String(),
-            ]));
+            ]);
+
+            $redis = Redis::connection()->client();
+            if ($redis instanceof PhpRedis) {
+                $originalPrefix = $redis->getOption(PhpRedis::OPT_PREFIX);
+                if ($originalPrefix !== '') {
+                    $redis->setOption(PhpRedis::OPT_PREFIX, '');
+                }
+
+                try {
+                    $redis->publish('deploy-logs:' . $deployment->id, $payload);
+                } finally {
+                    $redis->setOption(PhpRedis::OPT_PREFIX, (string) $originalPrefix);
+                }
+            } else {
+                Redis::publish('deploy-logs:' . $deployment->id, $payload);
+            }
         }
 
         return $deployment;

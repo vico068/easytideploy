@@ -179,6 +179,9 @@ func (c *AgentClient) PullImage(ctx context.Context, imageName string) error {
 	}
 
 	if !response.Success {
+		if response.Error != "" {
+			return fmt.Errorf("image pull failed: %s", response.Error)
+		}
 		return fmt.Errorf("image pull failed")
 	}
 

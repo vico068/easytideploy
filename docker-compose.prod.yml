@@ -71,6 +71,7 @@ services:
       - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
       - "--log.level=WARN"
       - "--accesslog=true"
+      - "--ping=true"
     ports:
       - "80:80"
       - "443:443"
@@ -96,6 +97,8 @@ services:
     image: easydeploy/orchestrator:${VERSION:-latest}
     container_name: easydeploy-orchestrator
     restart: always
+    group_add:
+      - "${DOCKER_GID:-988}"
     environment:
       LISTEN_ADDR: ":8080"
       API_KEY: ${ORCHESTRATOR_API_KEY}
@@ -103,7 +106,9 @@ services:
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       TRAEFIK_CONFIG_DIR: /etc/traefik/dynamic
       DOCKER_REGISTRY: ${DOCKER_REGISTRY}
-      DATA_DIR: /var/lib/easydeploy
+      # Agents may run on external workers and must not use localhost from the control plane.
+      AGENT_REGISTRY: ${AGENT_REGISTRY:-deploy.${DOMAIN}:5000}
+      DATA_DIR: /app
       APP_ENV: production
       GOMEMLIMIT: 48GiB
       ACME_ENABLED: "true"
@@ -126,6 +131,12 @@ services:
           memory: 512M
           cpus: "1.0"
 
+  agent:
+    environment:
+      SERVER_ID: "550e8400-e29b-41d4-a716-446655440001"
+      SERVER_NAME: "easyti-deploy"
+      ORCHESTRATOR_URL: http://orchestrator:8080
+
   panel:
     image: easydeploy/panel:${VERSION:-latest}
     container_name: easydeploy-panel
@@ -145,11 +156,23 @@ services:
       REDIS_HOST: redis
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_PORT: 6379
+      REDIS_PREFIX: ""
+      REDIS_QUEUE_RETRY_AFTER: "900"
       CACHE_STORE: redis
       SESSION_DRIVER: redis
       QUEUE_CONNECTION: redis
       EASYDEPLOY_ORCHESTRATOR_URL: http://orchestrator:8080
       EASYDEPLOY_API_KEY: ${ORCHESTRATOR_API_KEY}
+      BROADCAST_CONNECTION: reverb
+      REVERB_APP_ID: ${REVERB_APP_ID:-easydeploy}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-easydeploy-key}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-easydeploy-secret}
+      REVERB_HOST: reverb
+      REVERB_PORT: 9000
+      REVERB_SCHEME: http
+      REVERB_PUBLIC_HOST: ${REVERB_PUBLIC_HOST:-deploy.${DOMAIN}}
+      REVERB_PUBLIC_PORT: ${REVERB_PUBLIC_PORT:-443}
+      REVERB_PUBLIC_SCHEME: ${REVERB_PUBLIC_SCHEME:-https}
     volumes:
       - ./panel/app:/var/www/html/app
       - ./panel/config:/var/www/html/config
@@ -186,9 +209,18 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_PREFIX: ""
+      REDIS_QUEUE_RETRY_AFTER: "900"
       QUEUE_CONNECTION: redis
       EASYDEPLOY_ORCHESTRATOR_URL: http://orchestrator:8080
       EASYDEPLOY_API_KEY: ${ORCHESTRATOR_API_KEY}
+      BROADCAST_CONNECTION: reverb
+      REVERB_APP_ID: ${REVERB_APP_ID:-easydeploy}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-easydeploy-key}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-easydeploy-secret}
+      REVERB_HOST: reverb
+      REVERB_PORT: 9000
+      REVERB_SCHEME: http
     depends_on:
       postgres:
         condition: service_healthy
@@ -207,7 +239,7 @@ services:
   queue-worker-logs:
     image: easydeploy/panel:${VERSION:-latest}
     restart: always
-    command: php artisan queue:work redis --queue=deploy-logs --sleep=3 --tries=1 --timeout=600 --no-interaction
+    command: php artisan queue:work redis --queue=deploy-logs --sleep=3 --tries=5 --timeout=600 --no-interaction
     environment:
       APP_ENV: production
       APP_KEY: ${APP_KEY}
@@ -219,9 +251,18 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_PREFIX: ""
+      REDIS_QUEUE_RETRY_AFTER: "900"
       QUEUE_CONNECTION: redis
       EASYDEPLOY_ORCHESTRATOR_URL: http://orchestrator:8080
       EASYDEPLOY_API_KEY: ${ORCHESTRATOR_API_KEY}
+      BROADCAST_CONNECTION: reverb
+      REVERB_APP_ID: ${REVERB_APP_ID:-easydeploy}
+      REVERB_APP_KEY: ${REVERB_APP_KEY:-easydeploy-key}
+      REVERB_APP_SECRET: ${REVERB_APP_SECRET:-easydeploy-secret}
+      REVERB_HOST: reverb
+      REVERB_PORT: 9000
+      REVERB_SCHEME: http
     depends_on:
       postgres:
         condition: service_healthy
@@ -252,6 +293,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_HOST: redis
       REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_PREFIX: ""
+      REDIS_QUEUE_RETRY_AFTER: "900"
       QUEUE_CONNECTION: redis
       EASYDEPLOY_ORCHESTRATOR_URL: http://orchestrator:8080
       EASYDEPLOY_API_KEY: ${ORCHESTRATOR_API_KEY}

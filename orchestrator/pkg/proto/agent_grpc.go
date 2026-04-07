@@ -157,8 +157,9 @@ type PullImageRequest struct {
 
 // PullImageResponse represents the response from pulling an image
 type PullImageResponse struct {
-	Success bool
-	Digest  string
+	Success bool   `json:"Success"`
+	Digest  string `json:"Digest"`
+	Error   string `json:"Error"`
 }
 
 // BuildImageRequest represents a request to build an image

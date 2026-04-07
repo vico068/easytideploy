@@ -2,6 +2,14 @@
 # Uses Go templates to read env vars from the Traefik container
 http:
   routers:
+    reverb:
+      rule: "Host(`{{ env "PANEL_DOMAIN" }}`) && (PathPrefix(`/app`) || PathPrefix(`/apps`))"
+      entryPoints:
+        - websecure
+      service: reverb
+      priority: 100
+      tls:
+        certResolver: letsencrypt
     panel:
       rule: "Host(`{{ env "PANEL_DOMAIN" }}`)"
       entryPoints:
@@ -32,6 +40,10 @@ http:
       loadBalancer:
         servers:
           - url: "http://easydeploy-panel:8000"
+    reverb:
+      loadBalancer:
+        servers:
+          - url: "http://easydeploy-reverb:9000"
     orchestrator:
       loadBalancer:
         servers:

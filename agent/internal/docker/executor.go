@@ -478,8 +478,24 @@ func (c *Client) Pull(ctx context.Context, imageName string, registryAuth string
 	}
 	defer reader.Close()
 
-	// Consume the output to wait for completion
-	io.Copy(io.Discard, reader)
+	// Docker may report pull failures in the JSON stream while returning nil error.
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+
+		var evt struct {
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal([]byte(line), &evt); err == nil && evt.Error != "" {
+			return fmt.Errorf("failed to pull image: %s", evt.Error)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("failed to read pull stream: %w", err)
+	}
 
 	return nil
 }

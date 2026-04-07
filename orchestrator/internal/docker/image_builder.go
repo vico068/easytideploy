@@ -77,12 +77,6 @@ func (b *ImageBuilder) Build(ctx context.Context, opts BuildOptions, logCallback
 	startTime := time.Now()
 	var logs bytes.Buffer
 
-	// Create build context tar
-	buildContext, err := b.createBuildContext(opts.ContextPath, opts.Dockerfile)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create build context: %w", err)
-	}
-
 	// Prepare image tag
 	fullImageName := opts.ImageName
 	if opts.ImageTag != "" {
@@ -110,65 +104,129 @@ func (b *ImageBuilder) Build(ctx context.Context, opts BuildOptions, logCallback
 		ForceRemove: true,
 	}
 
-	// Execute build
-	response, err := b.client.ImageBuild(ctx, buildContext, buildOpts)
-	if err != nil {
-		return nil, fmt.Errorf("build failed: %w", err)
-	}
-	defer response.Body.Close()
+	const maxAttempts = 4
+	var lastErr error
 
-	// Process build output
-	var imageID string
-	decoder := json.NewDecoder(response.Body)
-	for {
-		var msg struct {
-			Stream      string `json:"stream"`
-			Error       string `json:"error"`
-			ErrorDetail struct {
-				Message string `json:"message"`
-			} `json:"errorDetail"`
-			Aux struct {
-				ID string `json:"ID"`
-			} `json:"aux"`
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if attempt > 1 {
+			backoff := time.Duration(attempt*2) * time.Second
+			if logCallback != nil {
+				logCallback(fmt.Sprintf("\n[RETRY] build attempt %d/%d after %s\n", attempt, maxAttempts, backoff))
+			}
+			time.Sleep(backoff)
 		}
 
-		if err := decoder.Decode(&msg); err != nil {
-			if err == io.EOF {
+		buildContext, err := b.createBuildContext(opts.ContextPath, opts.Dockerfile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create build context: %w", err)
+		}
+
+		response, err := b.client.ImageBuild(ctx, buildContext, buildOpts)
+		if err != nil {
+			lastErr = fmt.Errorf("build failed: %w", err)
+			if attempt < maxAttempts && isRetryableBuildError(lastErr.Error()) {
+				continue
+			}
+			return nil, lastErr
+		}
+
+		var imageID string
+		var attemptLogs bytes.Buffer
+		var buildErr string
+
+		decoder := json.NewDecoder(response.Body)
+		for {
+			var msg struct {
+				Stream      string `json:"stream"`
+				Error       string `json:"error"`
+				ErrorDetail struct {
+					Message string `json:"message"`
+				} `json:"errorDetail"`
+				Aux struct {
+					ID string `json:"ID"`
+				} `json:"aux"`
+			}
+
+			if err := decoder.Decode(&msg); err != nil {
+				if err == io.EOF {
+					break
+				}
+				continue
+			}
+
+			if msg.Error != "" {
+				buildErr = msg.Error
 				break
 			}
-			continue
-		}
 
-		if msg.Error != "" {
-			return nil, fmt.Errorf("build error: %s", msg.Error)
-		}
+			if msg.Stream != "" {
+				attemptLogs.WriteString(msg.Stream)
+				if logCallback != nil {
+					logCallback(msg.Stream)
+				}
+			}
 
-		if msg.Stream != "" {
-			logs.WriteString(msg.Stream)
-			if logCallback != nil {
-				logCallback(msg.Stream)
+			if msg.Aux.ID != "" {
+				imageID = msg.Aux.ID
 			}
 		}
 
-		if msg.Aux.ID != "" {
-			imageID = msg.Aux.ID
+		_ = response.Body.Close()
+		logs.WriteString(attemptLogs.String())
+
+		if buildErr != "" {
+			lastErr = fmt.Errorf("build error: %s", buildErr)
+			if attempt < maxAttempts && isRetryableBuildError(buildErr) {
+				if logCallback != nil {
+					logCallback(fmt.Sprintf("\n[WARN] transient build error detected: %s\n", buildErr))
+				}
+				continue
+			}
+			return nil, lastErr
+		}
+
+		imageInfo, _, err := b.client.ImageInspectWithRaw(ctx, fullImageName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to inspect image: %w", err)
+		}
+
+		return &BuildResult{
+			ImageID:   imageID,
+			ImageName: opts.ImageName,
+			ImageTag:  opts.ImageTag,
+			Size:      imageInfo.Size,
+			Duration:  time.Since(startTime),
+			Logs:      logs.String(),
+		}, nil
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("build failed with unknown error")
+	}
+	return nil, lastErr
+}
+
+func isRetryableBuildError(msg string) bool {
+	m := strings.ToLower(msg)
+	retryableNeedles := []string{
+		"connection reset by peer",
+		"i/o timeout",
+		"tls handshake timeout",
+		"unexpected eof",
+		"temporary failure in name resolution",
+		"context deadline exceeded",
+		"service unavailable",
+		"no route to host",
+		"dial tcp",
+	}
+
+	for _, needle := range retryableNeedles {
+		if strings.Contains(m, needle) {
+			return true
 		}
 	}
 
-	// Get image info
-	imageInfo, _, err := b.client.ImageInspectWithRaw(ctx, fullImageName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to inspect image: %w", err)
-	}
-
-	return &BuildResult{
-		ImageID:   imageID,
-		ImageName: opts.ImageName,
-		ImageTag:  opts.ImageTag,
-		Size:      imageInfo.Size,
-		Duration:  time.Since(startTime),
-		Logs:      logs.String(),
-	}, nil
+	return false
 }
 
 // BuildWithBuildpack builds using a predefined buildpack
@@ -291,18 +349,17 @@ func (b *ImageBuilder) Push(ctx context.Context, opts PushOptions, logCallback f
 	}
 
 	// Prepare auth config
-	var authStr string
+	authConfig := registry.AuthConfig{}
 	if opts.Username != "" && opts.Password != "" {
-		authConfig := registry.AuthConfig{
-			Username: opts.Username,
-			Password: opts.Password,
-		}
-		encodedJSON, err := json.Marshal(authConfig)
-		if err != nil {
-			return fmt.Errorf("failed to encode auth: %w", err)
-		}
-		authStr = base64.URLEncoding.EncodeToString(encodedJSON)
+		authConfig.Username = opts.Username
+		authConfig.Password = opts.Password
 	}
+
+	encodedJSON, err := json.Marshal(authConfig)
+	if err != nil {
+		return fmt.Errorf("failed to encode auth: %w", err)
+	}
+	authStr := base64.URLEncoding.EncodeToString(encodedJSON)
 
 	// Push image
 	response, err := b.client.ImagePush(ctx, registryImage, image.PushOptions{

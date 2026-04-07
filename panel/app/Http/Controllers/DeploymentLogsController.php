@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Deployment;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Redis;
+use Redis as PhpRedis;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class DeploymentLogsController extends Controller
@@ -76,90 +77,104 @@ class DeploymentLogsController extends Controller
 
             /** @var \Redis $redis */
             $redis = Redis::connection()->client();
+            $originalPrefix = null;
+            if ($redis instanceof PhpRedis) {
+                $originalPrefix = $redis->getOption(PhpRedis::OPT_PREFIX);
+                if ($originalPrefix !== '') {
+                    $redis->setOption(PhpRedis::OPT_PREFIX, '');
+                }
+            }
+
+            try {
 
             // ----------------------------------------------------------------
             // 1. Replay buffered messages published before we subscribed
             //    (avoids race condition where build finishes before client connects)
             // ----------------------------------------------------------------
-            $buffered  = $redis->lRange($bufferKey, 0, -1);
-            $shouldExit = false;
+                $buffered  = $redis->lRange($bufferKey, 0, -1);
+                $shouldExit = false;
 
-            foreach ($buffered as $raw) {
-                if (connection_aborted()) {
+                foreach ($buffered as $raw) {
+                    if (connection_aborted()) {
+                        return;
+                    }
+
+                    $payload = json_decode($raw, true);
+                    if (! is_array($payload)) {
+                        continue;
+                    }
+
+                    $shouldExit = $this->processAndSendPayload($payload, $terminalStatuses);
+                    if ($shouldExit) {
+                        break;
+                    }
+                }
+
+                if ($shouldExit) {
+                    $this->sendEvent('done', ['reason' => 'terminal_status']);
+
                     return;
                 }
 
-                $payload = json_decode($raw, true);
-                if (! is_array($payload)) {
-                    continue;
-                }
-
-                $shouldExit = $this->processAndSendPayload($payload, $terminalStatuses);
-                if ($shouldExit) {
-                    break;
-                }
-            }
-
-            if ($shouldExit) {
-                $this->sendEvent('done', ['reason' => 'terminal_status']);
-
-                return;
-            }
-
             // Confirm we are live
-            $this->sendEvent('heartbeat', ['ts' => now()->toIso8601String()]);
+                $this->sendEvent('heartbeat', ['ts' => now()->toIso8601String()]);
 
             // ----------------------------------------------------------------
             // 2. Live Pub/Sub  — phpredis subscribe() blocks until callback
             //    calls unsubscribe() or the connection times out.
             // ----------------------------------------------------------------
-            $maxDuration = 600; // 10 minutes
-            $startTime   = time();
+                $maxDuration = 600; // 10 minutes
+                $startTime   = time();
 
             // Allow the blocking subscribe call to run for up to $maxDuration seconds.
             // OPT_READ_TIMEOUT = -1 means "block forever"; we control abort manually.
-            $redis->setOption(\Redis::OPT_READ_TIMEOUT, -1);
+                $redis->setOption(\Redis::OPT_READ_TIMEOUT, -1);
 
-            $ctrl = $this; // capture for use inside closure
+                $ctrl = $this; // capture for use inside closure
 
-            try {
-                $redis->subscribe(
-                    [$channel],
-                    function (\Redis $r, string $chan, string $message) use (
-                        $ctrl,
-                        $terminalStatuses,
-                        $startTime,
-                        $maxDuration
-                    ) {
-                        if (connection_aborted()) {
-                            $r->unsubscribe();
+                try {
+                    $redis->subscribe(
+                        [$channel],
+                        function (\Redis $r, string $chan, string $message) use (
+                            $ctrl,
+                            $terminalStatuses,
+                            $startTime,
+                            $maxDuration
+                        ) {
+                            if (connection_aborted()) {
+                                $r->unsubscribe();
 
-                            return;
+                                return;
+                            }
+
+                            if ((time() - $startTime) > $maxDuration) {
+                                $ctrl->sendEvent('timeout', ['reason' => 'max_duration_exceeded']);
+                                $r->unsubscribe();
+
+                                return;
+                            }
+
+                            $payload = json_decode($message, true);
+                            if (! is_array($payload)) {
+                                return;
+                            }
+
+                            $exit = $ctrl->processAndSendPayload($payload, $terminalStatuses);
+                            if ($exit) {
+                                $r->unsubscribe();
+                            }
                         }
+                    );
+                } catch (\Throwable) {
+                    // Connection closed by client or network error — normal exit path
+                }
 
-                        if ((time() - $startTime) > $maxDuration) {
-                            $ctrl->sendEvent('timeout', ['reason' => 'max_duration_exceeded']);
-                            $r->unsubscribe();
-
-                            return;
-                        }
-
-                        $payload = json_decode($message, true);
-                        if (! is_array($payload)) {
-                            return;
-                        }
-
-                        $exit = $ctrl->processAndSendPayload($payload, $terminalStatuses);
-                        if ($exit) {
-                            $r->unsubscribe();
-                        }
-                    }
-                );
-            } catch (\Throwable) {
-                // Connection closed by client or network error — normal exit path
+                $this->sendEvent('done', ['reason' => 'stream_ended']);
+            } finally {
+                if ($redis instanceof PhpRedis && $originalPrefix !== null) {
+                    $redis->setOption(PhpRedis::OPT_PREFIX, (string) $originalPrefix);
+                }
             }
-
-            $this->sendEvent('done', ['reason' => 'stream_ended']);
         }, 200, [
             'Content-Type'     => 'text/event-stream',
             'Cache-Control'    => 'no-cache',

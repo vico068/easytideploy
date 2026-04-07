@@ -417,8 +417,15 @@ func (s *ServerHealthChecker) checkAllServers() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Get all servers
-	query := `SELECT id, agent_address, last_heartbeat FROM servers WHERE status != 'offline'`
+	// Compare staleness in PostgreSQL time domain to avoid timezone skew
+	query := `
+		UPDATE servers
+		SET status = 'offline', updated_at = NOW()
+		WHERE status != 'offline'
+		  AND last_heartbeat IS NOT NULL
+		  AND last_heartbeat < (NOW() - INTERVAL '2 minutes')
+		RETURNING id
+	`
 	rows, err := s.db.Pool().Query(ctx, query)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get servers for health check")
@@ -427,18 +434,11 @@ func (s *ServerHealthChecker) checkAllServers() {
 	defer rows.Close()
 
 	for rows.Next() {
-		var serverID, agentAddress string
-		var lastHeartbeat time.Time
-
-		if err := rows.Scan(&serverID, &agentAddress, &lastHeartbeat); err != nil {
+		var serverID string
+		if err := rows.Scan(&serverID); err != nil {
 			continue
 		}
-
-		// Check if heartbeat is stale
-		if time.Since(lastHeartbeat) > 2*time.Minute {
-			log.Warn().Str("server", serverID).Msg("Server heartbeat stale, marking as offline")
-			s.markServerOffline(ctx, serverID)
-		}
+		log.Warn().Str("server", serverID).Msg("Server heartbeat stale, marking as offline")
 	}
 }
 

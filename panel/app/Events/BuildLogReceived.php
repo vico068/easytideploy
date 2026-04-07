@@ -17,11 +17,24 @@ class BuildLogReceived implements ShouldBroadcastNow
         public readonly string $line,
         public readonly string $stage,
         public readonly string $ts,
+        public readonly ?string $applicationId = null,
+        public readonly ?string $userId = null,
     ) {}
 
-    public function broadcastOn(): PrivateChannel
+    /** @return array<PrivateChannel> */
+    public function broadcastOn(): array
     {
-        return new PrivateChannel('deployment.' . $this->deploymentId);
+        $channels = [new PrivateChannel('deployment.' . $this->deploymentId)];
+
+        if ($this->applicationId) {
+            $channels[] = new PrivateChannel('application.' . $this->applicationId);
+        }
+
+        if ($this->userId) {
+            $channels[] = new PrivateChannel('user.' . $this->userId);
+        }
+
+        return $channels;
     }
 
     public function broadcastAs(): string
