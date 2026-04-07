@@ -29,7 +29,7 @@ RUN apk add --no-cache \
     nginx
 
 # Install PHP extensions
-RUN docker-php-ext-install \
+RUN docker-php-ext-install -j1 \
     pdo_pgsql \
     pgsql \
     zip \
