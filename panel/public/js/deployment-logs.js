@@ -46,7 +46,7 @@ document.addEventListener('alpine:init', () => {
 
             // Preload persisted logs so users opening a finished deployment still see history.
             for (const line of this.initialLogs) {
-                this.addLogLine(line);
+                this.addLogLine(line, false);
             }
 
             if (this.finished) {
@@ -82,7 +82,7 @@ document.addEventListener('alpine:init', () => {
             return div.innerHTML;
         },
 
-        addLogLine(line) {
+        addLogLine(line, countAsStream = true) {
             if (!line || line.trim() === '') return;
 
             const hash = line.substring(0, 120);
@@ -90,7 +90,9 @@ document.addEventListener('alpine:init', () => {
             this.seenLines.add(hash);
 
             this.logCount++;
-            this.streamedLogLines++;
+            if (countAsStream) {
+                this.streamedLogLines++;
+            }
 
             const body   = this.terminalBody();
             const cursor = document.getElementById('cursor-' + this.deploymentId);
@@ -185,7 +187,7 @@ document.addEventListener('alpine:init', () => {
 
                     this.addSystemLine('>>> Recuperando logs persistidos...');
                     for (const line of lines) {
-                        this.addLogLine(line);
+                        this.addLogLine(line, false);
                     }
                 })
                 .catch((error) => {
