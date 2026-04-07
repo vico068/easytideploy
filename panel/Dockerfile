@@ -8,35 +8,7 @@ WORKDIR /app
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --ignore-platform-reqs
 
-# Stage 1: Build frontend assets
-FROM node:20-alpine AS frontend
-
-WORKDIR /app
-
-# Keep frontend build memory usage predictable on constrained builders.
-ENV NODE_OPTIONS="--max-old-space-size=8192" \
-    UV_THREADPOOL_SIZE=1 \
-    npm_config_jobs=1 \
-    npm_config_maxsockets=1
-
-# Copy Composer vendor so Filament theme CSS can @import from vendor/
-COPY --from=composer /app/vendor ./vendor
-
-# Copy package files
-COPY package.json package-lock.json* ./
-
-# Install dependencies
-RUN npm ci || npm install
-
-# Copy source files needed for build
-COPY resources ./resources
-COPY tailwind.config.js vite.config.js ./
-COPY postcss.config.js* ./
-
-# Build assets
-RUN npm run build
-
-# Stage 2: PHP application
+# Stage 1: PHP application
 FROM php:8.3-fpm-alpine AS base
 
 # Avoid parallel C compilation spikes when building PHP extensions.
@@ -83,8 +55,8 @@ COPY --from=composer /app/vendor ./vendor
 # Copy application
 COPY . .
 
-# Copy built assets from frontend stage
-COPY --from=frontend /app/public/build ./public/build
+# Frontend assets are committed under public/build to keep image builds deterministic
+# and avoid heavy Node/Vite compilation during production deploys.
 
 # Provide dummy env vars so artisan commands work during build
 ENV APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
