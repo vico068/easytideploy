@@ -13,6 +13,12 @@ FROM node:20-alpine AS frontend
 
 WORKDIR /app
 
+# Reduce peak memory pressure during npm/vite steps.
+ENV NODE_OPTIONS="--max-old-space-size=8192" \
+    UV_THREADPOOL_SIZE=1 \
+    npm_config_jobs=1 \
+    npm_config_maxsockets=1
+
 # Copy Composer vendor so Filament theme CSS can @import from vendor/
 COPY --from=composer /app/vendor ./vendor
 
