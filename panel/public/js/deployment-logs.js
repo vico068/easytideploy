@@ -21,6 +21,7 @@ document.addEventListener('alpine:init', () => {
         currentStatus: initialStatus || 'pending',
         sseState:      'connecting',
         sseText:       'aguardando socket...',
+        streamedLogLines: 0,
 
         statusLabels: {
             pending:     'Pendente',
@@ -87,6 +88,7 @@ document.addEventListener('alpine:init', () => {
             this.seenLines.add(hash);
 
             this.logCount++;
+            this.streamedLogLines++;
 
             const body   = this.terminalBody();
             const cursor = document.getElementById('cursor-' + this.deploymentId);
@@ -146,7 +148,8 @@ document.addEventListener('alpine:init', () => {
             this.sseText   = 'completo';
             this.cleanup();
 
-            if (this.logCount === 0) {
+            // If websocket only delivered status/system lines, load persisted logs.
+            if (this.streamedLogLines === 0) {
                 this.fetchPersistedLogs();
             }
         },
