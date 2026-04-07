@@ -10,7 +10,7 @@ RUN go mod download
 
 COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux GOMAXPROCS=1 GOMEMLIMIT=1GiB go build -p=1 -ldflags="-s -w" -o /orchestrator ./cmd/orchestrator
+RUN CGO_ENABLED=0 GOOS=linux GOMAXPROCS=1 GOMEMLIMIT=48GiB go build -p=1 -ldflags="-s -w" -o /orchestrator ./cmd/orchestrator
 
 # Runtime
 FROM alpine:3.20
