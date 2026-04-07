@@ -26,7 +26,7 @@ COPY --from=composer /app/vendor ./vendor
 COPY package.json package-lock.json* ./
 
 # Install dependencies
-RUN npm ci || npm install
+RUN npm install
 
 # Copy source files needed for build
 COPY resources ./resources
