@@ -9,23 +9,23 @@ COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --ignore-platform-reqs
 
 # Stage 1: PHP application
-FROM php:8.3-fpm-alpine AS base
+FROM php:8.3-fpm AS base
 
 # Avoid parallel C compilation spikes when building PHP extensions.
 ENV MAKEFLAGS="-j1"
 
 # Install system dependencies
-RUN apk add --no-cache \
-    postgresql-dev \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
     libzip-dev \
-    oniguruma-dev \
-    linux-headers \
+    libonig-dev \
     curl \
     git \
     zip \
     unzip \
     supervisor \
-    nginx
+    nginx \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions
 RUN docker-php-ext-install -j1 \
@@ -35,10 +35,11 @@ RUN docker-php-ext-install -j1 \
     pcntl
 
 # Install Redis extension
-RUN apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
+RUN apt-get update && apt-get install -y --no-install-recommends $PHPIZE_DEPS \
     && pecl install redis \
     && docker-php-ext-enable redis \
-    && apk del .build-deps
+    && apt-get purge -y --auto-remove $PHPIZE_DEPS \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Composer (used for dump-autoload and artisan commands)
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -77,7 +78,7 @@ RUN chown -R www-data:www-data storage bootstrap/cache \
 
 # Copy PHP config
 COPY docker/php.ini /usr/local/etc/php/conf.d/99-easydeploy.ini
-COPY docker/nginx.conf /etc/nginx/http.d/default.conf
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY docker/supervisord.conf /etc/supervisord.conf
 
 EXPOSE 8000
