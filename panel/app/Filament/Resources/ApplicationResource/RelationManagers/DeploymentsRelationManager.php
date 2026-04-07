@@ -6,22 +6,12 @@ use App\Enums\DeploymentStatus;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Livewire\Attributes\On;
 
 class DeploymentsRelationManager extends RelationManager
 {
     protected static string $relationship = 'deployments';
 
     protected static ?string $title = 'Deployments';
-
-    /** Application ID para o canal WebSocket — preenchido no mount() */
-    public string $applicationId = '';
-
-    public function mount(): void
-    {
-        parent::mount();
-        $this->applicationId = $this->ownerRecord->id ?? '';
-    }
 
     public function table(Table $table): Table
     {
@@ -78,15 +68,29 @@ class DeploymentsRelationManager extends RelationManager
 
     /** Refresh imediato quando o botão Deploy é clicado na página pai */
     #[On('deployment-triggered')]
+    #[\Livewire\Attributes\On('deployment-triggered')]
     public function onDeploymentTriggered(): void
     {
         $this->resetTable();
     }
 
-    /** Recebe mudança de status via WebSocket → atualiza a tabela em tempo real */
-    #[On('echo-private:application.{applicationId},DeploymentStatusChanged')]
     public function onDeploymentStatusChanged(array $event): void
     {
         $this->resetTable();
+    }
+
+    protected function getListeners(): array
+    {
+        $applicationId = (string) ($this->ownerRecord?->id ?? '');
+        if ($applicationId === '') {
+            return [
+                'deployment-triggered' => 'onDeploymentTriggered',
+            ];
+        }
+
+        return [
+            'deployment-triggered' => 'onDeploymentTriggered',
+            "echo-private:application.{$applicationId},DeploymentStatusChanged" => 'onDeploymentStatusChanged',
+        ];
     }
 }

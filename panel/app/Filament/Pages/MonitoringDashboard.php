@@ -11,7 +11,6 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Livewire\Attributes\On;
 
 class MonitoringDashboard extends Page
 {
@@ -406,8 +405,6 @@ class MonitoringDashboard extends Page
         // Livewire re-renderiza automaticamente
     }
 
-    /** Recebe mudanças de status de container em tempo real via WebSocket */
-    #[On('echo-private:application.{selectedAppId},ContainerStatusChanged')]
     public function onContainerStatusChanged(array $event): void
     {
         $containerId = $event['container_id'] ?? '';
@@ -424,6 +421,18 @@ class MonitoringDashboard extends Page
         }
 
         $this->previousContainerStatuses[$containerId] = $status;
+    }
+
+    protected function getListeners(): array
+    {
+        $applicationId = (string) ($this->selectedAppId ?? '');
+        if ($applicationId === '') {
+            return [];
+        }
+
+        return [
+            "echo-private:application.{$applicationId},ContainerStatusChanged" => 'onContainerStatusChanged',
+        ];
     }
 }
 
