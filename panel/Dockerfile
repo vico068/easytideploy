@@ -58,7 +58,7 @@ ENV APP_KEY=base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA= \
     CACHE_STORE=file \
     QUEUE_CONNECTION=sync
 
-RUN composer dump-autoload --optimize
+RUN composer dump-autoload --optimize --no-scripts
 
 # Publish Livewire assets (required for forms to work)
 RUN php artisan livewire:publish --assets
