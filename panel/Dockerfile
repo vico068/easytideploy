@@ -32,8 +32,6 @@ RUN docker-php-ext-install -j1 \
     pdo_pgsql \
     pgsql \
     zip \
-    mbstring \
-    opcache \
     pcntl
 
 # Install Redis extension
