@@ -13,6 +13,12 @@ FROM node:20-alpine AS frontend
 
 WORKDIR /app
 
+# Keep frontend build memory usage predictable on constrained builders.
+ENV NODE_OPTIONS="--max-old-space-size=8192" \
+    UV_THREADPOOL_SIZE=1 \
+    npm_config_jobs=1 \
+    npm_config_maxsockets=1
+
 # Copy Composer vendor so Filament theme CSS can @import from vendor/
 COPY --from=composer /app/vendor ./vendor
 
@@ -32,6 +38,9 @@ RUN npm run build
 
 # Stage 2: PHP application
 FROM php:8.3-fpm-alpine AS base
+
+# Avoid parallel C compilation spikes when building PHP extensions.
+ENV MAKEFLAGS="-j1"
 
 # Install system dependencies
 RUN apk add --no-cache \
