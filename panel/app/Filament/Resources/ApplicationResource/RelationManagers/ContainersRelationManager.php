@@ -6,22 +6,12 @@ use App\Enums\ContainerStatus;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Livewire\Attributes\On;
 
 class ContainersRelationManager extends RelationManager
 {
     protected static string $relationship = 'containers';
 
     protected static ?string $title = 'Containers';
-
-    /** Application ID para o canal WebSocket — preenchido no mount() */
-    public string $applicationId = '';
-
-    public function mount(): void
-    {
-        parent::mount();
-        $this->applicationId = $this->ownerRecord->id ?? '';
-    }
 
     public function table(Table $table): Table
     {
@@ -92,10 +82,20 @@ class ContainersRelationManager extends RelationManager
             ]);
     }
 
-    /** Atualiza tabela quando status/saude dos containers mudar em tempo real */
-    #[On('echo-private:application.{applicationId},ContainerStatusChanged')]
     public function onContainerStatusChanged(array $event): void
     {
         $this->resetTable();
+    }
+
+    protected function getListeners(): array
+    {
+        $applicationId = (string) ($this->ownerRecord?->id ?? '');
+        if ($applicationId === '') {
+            return [];
+        }
+
+        return [
+            "echo-private:application.{$applicationId},ContainerStatusChanged" => 'onContainerStatusChanged',
+        ];
     }
 }

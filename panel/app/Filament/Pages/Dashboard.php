@@ -6,7 +6,6 @@ use App\Models\Application;
 use App\Models\Container;
 use App\Models\Deployment;
 use Filament\Pages\Dashboard as FilamentDashboard;
-use Livewire\Attributes\On;
 
 class Dashboard extends FilamentDashboard
 {
@@ -18,24 +17,27 @@ class Dashboard extends FilamentDashboard
 
     protected static ?int $navigationSort = -2;
 
-    public string $userId = '';
-
-    public function mount(): void
-    {
-        parent::mount();
-        $this->userId = auth()->id() ?? '';
-    }
-
-    #[On('echo-private:user.{userId},DeploymentStatusChanged')]
     public function onDeploymentStatusChanged(array $event): void
     {
         $this->dispatch('$refresh');
     }
 
-    #[On('echo-private:user.{userId},ContainerStatusChanged')]
     public function onContainerStatusChanged(array $event): void
     {
         $this->dispatch('$refresh');
+    }
+
+    protected function getListeners(): array
+    {
+        $userId = (string) (auth()->id() ?? '');
+        if ($userId === '') {
+            return [];
+        }
+
+        return [
+            "echo-private:user.{$userId},DeploymentStatusChanged" => 'onDeploymentStatusChanged',
+            "echo-private:user.{$userId},ContainerStatusChanged" => 'onContainerStatusChanged',
+        ];
     }
 
     public function getViewData(): array

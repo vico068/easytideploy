@@ -7,7 +7,6 @@ use App\Services\DeploymentService;
 use Filament\Actions;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
-use Livewire\Attributes\On;
 
 class EditApplication extends EditRecord
 {
@@ -15,24 +14,27 @@ class EditApplication extends EditRecord
 
     protected static string $view = 'filament.resources.application-resource.pages.edit-application';
 
-    public string $applicationId = '';
-
-    public function mount(int|string $record): void
-    {
-        parent::mount($record);
-        $this->applicationId = (string) ($this->record?->id ?? '');
-    }
-
-    #[On('echo-private:application.{applicationId},DeploymentStatusChanged')]
     public function onDeploymentStatusChanged(array $event): void
     {
         $this->refreshStatus();
     }
 
-    #[On('echo-private:application.{applicationId},ContainerStatusChanged')]
     public function onContainerStatusChanged(array $event): void
     {
         $this->refreshStatus();
+    }
+
+    protected function getListeners(): array
+    {
+        $applicationId = (string) ($this->record?->id ?? '');
+        if ($applicationId === '') {
+            return [];
+        }
+
+        return [
+            "echo-private:application.{$applicationId},DeploymentStatusChanged" => 'onDeploymentStatusChanged',
+            "echo-private:application.{$applicationId},ContainerStatusChanged" => 'onContainerStatusChanged',
+        ];
     }
 
     public function refreshStatus(): void
