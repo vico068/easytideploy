@@ -6,15 +6,17 @@
  * qualquer elemento `x-data`, inclusive os injetados via Livewire morphdom.
  */
 document.addEventListener('alpine:init', () => {
-    Alpine.data('deploymentLogs', (deploymentId, isTerminal, initialStatus, initialLogs = [], logsUrl = null) => ({
+    Alpine.data('deploymentLogs', (deploymentId, isTerminal, initialStatus, initialLogs = [], logsUrl = null, applicationId = null) => ({
         deploymentId,
         isTerminal,
         initialLogs,
         logsUrl,
+        applicationId,
 
         logCount:      0,
         autoScroll:    true,
         channel:       null,
+        appChannel:    null,
         connectTimer:  null,
         finished:      isTerminal,
         seenLines:     new Set(),
@@ -200,31 +202,44 @@ document.addEventListener('alpine:init', () => {
                     return false;
                 }
 
+                const handleLogEvent = (event) => {
+                    if (event?.line) {
+                        this.addLogLine(event.line);
+                    }
+                };
+
+                const handleStageEvent = (event) => {
+                    if (event?.stage && event?.status) {
+                        this.addLogLine('>>> ' + event.stage.toUpperCase() + ': ' + event.status);
+                    }
+                };
+
+                const handleStatusEvent = (event) => {
+                    if (event?.status) {
+                        this.updateStatus(event.status);
+                        this.addSystemLine('>>> STATUS: ' + String(event.status).toUpperCase());
+
+                        if (event?.error) {
+                            this.addSystemLine('>>> ERRO: ' + event.error);
+                        }
+
+                        if (['running', 'failed', 'cancelled', 'rolled_back'].includes(event.status)) {
+                            this.finishStream();
+                        }
+                    }
+                };
+
                 this.channel = window.Echo.private('deployment.' + this.deploymentId)
-                    .listen('.BuildLogReceived', (event) => {
-                        if (event?.line) {
-                            this.addLogLine(event.line);
-                        }
-                    })
-                    .listen('.DeploymentStageChanged', (event) => {
-                        if (event?.stage && event?.status) {
-                            this.addLogLine('>>> ' + event.stage.toUpperCase() + ': ' + event.status);
-                        }
-                    })
-                    .listen('.DeploymentStatusChanged', (event) => {
-                        if (event?.status) {
-                            this.updateStatus(event.status);
-                            this.addSystemLine('>>> STATUS: ' + String(event.status).toUpperCase());
+                    .listen('.BuildLogReceived', handleLogEvent)
+                    .listen('.DeploymentStageChanged', handleStageEvent)
+                    .listen('.DeploymentStatusChanged', handleStatusEvent);
 
-                            if (event?.error) {
-                                this.addSystemLine('>>> ERRO: ' + event.error);
-                            }
-
-                            if (['running', 'failed', 'cancelled', 'rolled_back'].includes(event.status)) {
-                                this.finishStream();
-                            }
-                        }
-                    });
+                if (this.applicationId) {
+                    this.appChannel = window.Echo.private('application.' + this.applicationId)
+                        .listen('.BuildLogReceived', handleLogEvent)
+                        .listen('.DeploymentStageChanged', handleStageEvent)
+                        .listen('.DeploymentStatusChanged', handleStatusEvent);
+                }
 
                 this.sseState = 'connected';
                 this.sseText = 'websocket ativo';
@@ -264,6 +279,11 @@ document.addEventListener('alpine:init', () => {
             if (this.channel && window.Echo) {
                 window.Echo.leave('deployment.' + this.deploymentId);
                 this.channel = null;
+            }
+
+            if (this.appChannel && window.Echo && this.applicationId) {
+                window.Echo.leave('application.' + this.applicationId);
+                this.appChannel = null;
             }
         },
     }));

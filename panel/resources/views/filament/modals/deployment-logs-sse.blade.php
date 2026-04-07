@@ -95,7 +95,8 @@
          {{ $isTerminal ? 'true' : 'false' }},
          '{{ $statusValue }}',
          @js($initialLogs),
-         '{{ $logsUrl }}'
+         '{{ $logsUrl }}',
+         '{{ $deployment->application_id }}'
      )"
      x-on:remove.window="cleanup()">
 

@@ -21,11 +21,17 @@ use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\HtmlString;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Illuminate\Support\Facades\File;
 
 class AdminPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
+        $deploymentLogsJsPath = public_path('js/deployment-logs.js');
+        $deploymentLogsJsVersion = File::exists($deploymentLogsJsPath)
+            ? (string) File::lastModified($deploymentLogsJsPath)
+            : (string) time();
+
         return $panel
             ->default()
             ->id('admin')
@@ -48,7 +54,7 @@ class AdminPanelProvider extends PanelProvider
                     '<link rel="stylesheet" href="' . Vite::asset('resources/css/filament-addon.css') . '">' .
                     // Alpine component for realtime deployment logs — loaded before Alpine.start()
                     // so that Alpine.data('deploymentLogs') is registered when modals are opened.
-                    '<script src="' . secure_asset('js/deployment-logs.js') . '"></script>' .
+                    '<script src="' . secure_asset('js/deployment-logs.js') . '?v=' . $deploymentLogsJsVersion . '"></script>' .
                     // Inject Reverb config as meta tags for runtime access in echo.js
                     // REVERB_PUBLIC_* are the browser-facing address (not the internal Docker host)
                     sprintf(
