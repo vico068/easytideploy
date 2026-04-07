@@ -306,11 +306,6 @@ func (g *ConfigGenerator) buildConfig(app *Application, domains []*Domain, conta
 		LoadBalancer: &LoadBalancer{
 			Servers:        servers,
 			PassHostHeader: true,
-			HealthCheck: &HealthCheck{
-				Path:     app.HealthCheckPath,
-				Interval: "10s",
-				Timeout:  "3s",
-			},
 		},
 	}
 
