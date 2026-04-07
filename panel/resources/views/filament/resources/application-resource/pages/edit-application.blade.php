@@ -12,7 +12,6 @@
             $statusConfig = match($statusVal) {
                 'active'    => ['dot' => 'bg-emerald-500', 'text' => 'Ativa', 'badge' => 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'],
                 'deploying' => ['dot' => 'bg-amber-500 animate-pulse', 'text' => 'Deployando', 'badge' => 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'],
-                'building'  => ['dot' => 'bg-amber-500 animate-building', 'text' => 'Building', 'badge' => 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'],
                 'failed'    => ['dot' => 'bg-red-500', 'text' => 'Falhou', 'badge' => 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-400'],
                 default     => ['dot' => 'bg-slate-400', 'text' => 'Parada', 'badge' => 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'],
             };
@@ -137,4 +136,7 @@
         />
 
     </div>
+
+    {{-- Polling para manter status do header atualizado sem WebSocket --}}
+    <div wire:poll.5000ms="refreshStatus" class="hidden"></div>
 </x-filament-panels::page>

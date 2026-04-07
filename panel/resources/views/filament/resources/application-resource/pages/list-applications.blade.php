@@ -4,7 +4,7 @@
         'fi-resource-' . str_replace('/', '-', $this->getResource()::getSlug()),
     ])
 >
-    <div class="flex flex-col gap-y-6">
+    <div class="flex flex-col gap-y-6" wire:poll.5000ms>
         <x-filament-panels::resources.tabs />
 
         {{-- Barra de controles: contagem + toggle de view --}}
@@ -18,9 +18,9 @@
                 </span>
 
                 @php
-                    $active   = $apps->where('status', 'active')->count();
-                    $deploying = $apps->whereIn('status', ['deploying','building'])->count();
-                    $failed   = $apps->where('status', 'failed')->count();
+                    $active   = $apps->filter(fn($a) => $a->status?->value === 'active')->count();
+                    $deploying = $apps->filter(fn($a) => $a->status?->value === 'deploying')->count();
+                    $failed   = $apps->filter(fn($a) => $a->status?->value === 'failed')->count();
                 @endphp
 
                 @if($active > 0)
@@ -125,21 +125,20 @@
                             $statusDot = match($statusValue) {
                                 'active'    => 'bg-emerald-500',
                                 'deploying' => 'bg-amber-500 animate-pulse',
-                                'building'  => 'bg-amber-500 animate-building',
                                 'failed'    => 'bg-red-500',
                                 default     => 'bg-slate-400',
                             };
                             $borderHover = match($statusValue) {
-                                'active'             => 'dark:hover:border-emerald-500/30 hover:border-emerald-300/60',
-                                'deploying','building'=> 'dark:hover:border-amber-500/30 hover:border-amber-300/60',
-                                'failed'             => 'dark:hover:border-red-500/30 hover:border-red-300/60',
-                                default              => 'dark:hover:border-brand-500/30 hover:border-brand-300/60',
+                                'active'    => 'dark:hover:border-emerald-500/30 hover:border-emerald-300/60',
+                                'deploying' => 'dark:hover:border-amber-500/30 hover:border-amber-300/60',
+                                'failed'    => 'dark:hover:border-red-500/30 hover:border-red-300/60',
+                                default     => 'dark:hover:border-brand-500/30 hover:border-brand-300/60',
                             };
                             $glowColor = match($statusValue) {
-                                'active'             => 'bg-emerald-500/10',
-                                'deploying','building'=> 'bg-amber-500/10',
-                                'failed'             => 'bg-red-500/10',
-                                default              => 'bg-brand-500/10',
+                                'active'    => 'bg-emerald-500/10',
+                                'deploying' => 'bg-amber-500/10',
+                                'failed'    => 'bg-red-500/10',
+                                default     => 'bg-brand-500/10',
                             };
                             $stagger = 'stagger-' . min($index + 1, 6);
                             $lastDeploy = $app->latestDeployment;
