@@ -18,7 +18,6 @@ ENV MAKEFLAGS="-j1"
 RUN apk add --no-cache \
     postgresql-dev \
     libzip-dev \
-    icu-dev \
     oniguruma-dev \
     linux-headers \
     curl \
@@ -33,7 +32,6 @@ RUN docker-php-ext-install -j1 \
     pdo_pgsql \
     pgsql \
     zip \
-    intl \
     mbstring \
     opcache \
     pcntl
