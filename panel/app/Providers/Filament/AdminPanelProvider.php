@@ -46,7 +46,7 @@ class AdminPanelProvider extends PanelProvider
                 'panels::head.end',
                 fn (): HtmlString => new HtmlString(
                     '<link rel="stylesheet" href="' . Vite::asset('resources/css/filament-addon.css') . '">' .
-                    // Alpine component for SSE deployment logs — loaded before Alpine.start()
+                    // Alpine component for realtime deployment logs — loaded before Alpine.start()
                     // so that Alpine.data('deploymentLogs') is registered when modals are opened.
                     '<script src="' . secure_asset('js/deployment-logs.js') . '"></script>' .
                     // Inject Reverb config as meta tags for runtime access in echo.js

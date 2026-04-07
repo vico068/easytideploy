@@ -2,7 +2,7 @@
     $deploymentId = $deployment->id;
     $isTerminal   = $deployment->status->isTerminal();
     $statusValue  = $deployment->status->value;
-    $streamUrl    = route('deployments.logs.stream', $deployment);
+    $initialLogs  = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', (string) ($deployment->build_logs ?? '')))));
 @endphp
 
 {{-- Componente Alpine registrado em public/js/deployment-logs.js via alpine:init --}}
@@ -91,9 +91,9 @@
 <div class="space-y-3 -mx-2"
      x-data="deploymentLogs(
          '{{ $deploymentId }}',
-         '{{ $streamUrl }}',
          {{ $isTerminal ? 'true' : 'false' }},
-         '{{ $statusValue }}'
+         '{{ $statusValue }}',
+         @js($initialLogs)
      )"
      x-on:remove.window="cleanup()">
 

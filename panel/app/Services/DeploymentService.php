@@ -7,10 +7,10 @@ use App\Enums\DeploymentStatus;
 use App\Events\DeploymentCompleted;
 use App\Events\DeploymentFailed;
 use App\Events\DeploymentStarted;
+use App\Jobs\ListenDeploymentLogs;
 use App\Models\Application;
 use App\Models\Deployment;
 use Illuminate\Support\Facades\Redis;
-use Illuminate\Support\Str;
 
 class DeploymentService
 {
@@ -29,6 +29,9 @@ class DeploymentService
 
         // Update application status
         $application->update(['status' => ApplicationStatus::Deploying]);
+
+        // Bridge Redis Pub/Sub logs into broadcast events for realtime UI.
+        ListenDeploymentLogs::dispatch($deployment->id)->onQueue('deploy-logs');
 
         // Dispatch event
         event(new DeploymentStarted($deployment));
@@ -88,6 +91,9 @@ class DeploymentService
         ]);
 
         $application->update(['status' => ApplicationStatus::Deploying]);
+
+        // Rollback reuses the same log stream pipeline as normal deployments.
+        ListenDeploymentLogs::dispatch($newDeployment->id)->onQueue('deploy-logs');
 
         event(new DeploymentStarted($newDeployment));
 

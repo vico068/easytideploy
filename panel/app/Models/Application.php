@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Enums\ApplicationStatus;
 use App\Enums\ApplicationType;
+use App\Enums\ContainerStatus;
+use App\Enums\HealthStatus;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -166,6 +168,79 @@ class Application extends Model
     public function isDeploying(): bool
     {
         return $this->status === ApplicationStatus::Deploying;
+    }
+
+    public function getRuntimeStateAttribute(): string
+    {
+        $status = $this->status?->value ?? (string) $this->status;
+
+        if ($status === ApplicationStatus::Deploying->value) {
+            return 'deploying';
+        }
+
+        if ($status === ApplicationStatus::Failed->value) {
+            return 'failed';
+        }
+
+        if ($status === ApplicationStatus::Stopped->value) {
+            return 'stopped';
+        }
+
+        [$runningCount, $healthyRunningCount] = $this->getRuntimeContainerCounts();
+
+        if ($status === ApplicationStatus::Active->value && $healthyRunningCount > 0) {
+            return 'up';
+        }
+
+        if ($status === ApplicationStatus::Active->value && $runningCount > 0) {
+            return 'down';
+        }
+
+        if ($status === ApplicationStatus::Active->value) {
+            return 'down';
+        }
+
+        return 'stopped';
+    }
+
+    public function getRuntimeLabelAttribute(): string
+    {
+        return match ($this->runtime_state) {
+            'up' => 'UP',
+            'down' => 'DOWN',
+            'deploying' => 'Deployando',
+            'failed' => 'Falhou',
+            default => 'Parada',
+        };
+    }
+
+    /**
+     * @return array{0:int,1:int}
+     */
+    private function getRuntimeContainerCounts(): array
+    {
+        if ($this->relationLoaded('containers')) {
+            $running = $this->containers->filter(
+                fn ($container) => ($container->status?->value ?? $container->status) === ContainerStatus::Running->value
+            );
+
+            $healthyRunning = $running->filter(
+                fn ($container) => ($container->health_status?->value ?? $container->health_status) === HealthStatus::Healthy->value
+            );
+
+            return [$running->count(), $healthyRunning->count()];
+        }
+
+        $runningCount = $this->containers()
+            ->where('status', ContainerStatus::Running)
+            ->count();
+
+        $healthyRunningCount = $this->containers()
+            ->where('status', ContainerStatus::Running)
+            ->where('health_status', HealthStatus::Healthy)
+            ->count();
+
+        return [$runningCount, $healthyRunningCount];
     }
 
     public function getEnvironmentArray(): array

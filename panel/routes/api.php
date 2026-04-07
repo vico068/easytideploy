@@ -135,8 +135,13 @@ Route::post('/internal/metrics/batch', function (\Illuminate\Http\Request $reque
     return response()->json(['success' => true, 'count' => count($validated['http_metrics'])]);
 });
 
-Route::prefix('internal')->middleware('auth:sanctum')->group(function () {
+Route::prefix('internal')->group(function () {
     Route::post('/containers/{container}/status', function ($container, \Illuminate\Http\Request $request) {
+        $apiKey = $request->bearerToken();
+        if (! $apiKey || ! hash_equals(config('easydeploy.orchestrator_api_key') ?? '', $apiKey)) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
         $container = \App\Models\Container::findOrFail($container);
         $container->update([
             'status' => $request->input('status'),
@@ -153,6 +158,11 @@ Route::prefix('internal')->middleware('auth:sanctum')->group(function () {
     });
 
     Route::post('/servers/{server}/heartbeat', function ($server, \Illuminate\Http\Request $request) {
+        $apiKey = $request->bearerToken();
+        if (! $apiKey || ! hash_equals(config('easydeploy.orchestrator_api_key') ?? '', $apiKey)) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
         $server = \App\Models\Server::findOrFail($server);
         $server->update([
             'last_heartbeat_at' => now(),

@@ -38,18 +38,18 @@ const (
 
 // Scheduler manages build jobs and container health
 type Scheduler struct {
-	db              *database.DB
-	queue           *queue.RedisQueue
-	cfg             *config.Config
-	gitCloner       *git.Cloner
-	imageBuilder    *docker.ImageBuilder
-	agentClients    map[string]*AgentClient
-	traefikGen      *traefik.ConfigGenerator
-	traefikScraper  *metrics.TraefikScraper
-	mu              sync.RWMutex
-	healthTicker    *time.Ticker
-	stopCh          chan struct{}
-	wg              sync.WaitGroup
+	db             *database.DB
+	queue          *queue.RedisQueue
+	cfg            *config.Config
+	gitCloner      *git.Cloner
+	imageBuilder   *docker.ImageBuilder
+	agentClients   map[string]*AgentClient
+	traefikGen     *traefik.ConfigGenerator
+	traefikScraper *metrics.TraefikScraper
+	mu             sync.RWMutex
+	healthTicker   *time.Ticker
+	stopCh         chan struct{}
+	wg             sync.WaitGroup
 }
 
 // SetTraefikGenerator sets the Traefik config generator (called after initialization)
@@ -543,9 +543,9 @@ type containerInfo struct {
 
 func (s *Scheduler) waitForContainersHealthy(ctx context.Context, containers []containerInfo, logger *zerolog.Logger) error {
 	const (
-		maxRetries      = 30  // Maximum number of health check attempts
-		retryInterval   = 2   // Seconds between retries
-		startupGraceSec = 5   // Initial grace period before first check
+		maxRetries      = 30 // Maximum number of health check attempts
+		retryInterval   = 2  // Seconds between retries
+		startupGraceSec = 5  // Initial grace period before first check
 	)
 
 	// Give containers a few seconds to start up
@@ -691,10 +691,17 @@ func (s *Scheduler) saveContainer(ctx context.Context, deploymentID, appID, serv
 	query := `
 		INSERT INTO containers (id, deployment_id, application_id, server_id, docker_container_id, name, host_port, internal_port, status, health_status, replica_index, created_at, updated_at)
 		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'running', 'healthy', $8, NOW(), NOW())
+		RETURNING id
 	`
 	name := fmt.Sprintf("%s-replica-%d", appID, replica)
-	_, err := s.db.Pool().Exec(ctx, query, deploymentID, appID, serverID, containerID, name, hostPort, internalPort, replica)
-	return err
+	var dbContainerID string
+	if err := s.db.Pool().QueryRow(ctx, query, deploymentID, appID, serverID, containerID, name, hostPort, internalPort, replica).Scan(&dbContainerID); err != nil {
+		return err
+	}
+
+	go s.notifyPanelContainerStatus(dbContainerID, "running", "healthy", nil, nil)
+
+	return nil
 }
 
 // cleanupOldContainers stops and removes containers from previous deployments of the same application
@@ -760,6 +767,8 @@ func (s *Scheduler) cleanupOldContainers(ctx context.Context, applicationID, cur
 		if _, err := s.db.Pool().Exec(ctx, updateQuery, c.ID); err != nil {
 			logger.Warn().Err(err).Str("container", c.ID).Msg("Failed to update old container status")
 		}
+
+		go s.notifyPanelContainerStatus(c.ID, "stopped", "unknown", nil, nil)
 
 		logger.Info().Str("container_id", c.DockerID).Str("db_id", c.ID).Msg("Old container cleaned up")
 	}
@@ -846,13 +855,80 @@ func (s *Scheduler) checkContainerHealth(containerID, dockerContainerID, serverI
 func (s *Scheduler) markContainerUnhealthy(containerID string) {
 	ctx := context.Background()
 	query := `UPDATE containers SET health_status = 'unhealthy', updated_at = NOW() WHERE id = $1`
-	s.db.Pool().Exec(ctx, query, containerID)
+	cmd, err := s.db.Pool().Exec(ctx, query, containerID)
+	if err != nil {
+		log.Debug().Err(err).Str("container_id", containerID).Msg("Failed to mark container unhealthy")
+		return
+	}
+
+	if cmd.RowsAffected() > 0 {
+		go s.notifyPanelContainerStatus(containerID, "running", "unhealthy", nil, nil)
+	}
 }
 
 func (s *Scheduler) markContainerHealthy(containerID string) {
 	ctx := context.Background()
 	query := `UPDATE containers SET health_status = 'healthy', health_checked_at = NOW(), updated_at = NOW() WHERE id = $1 AND health_status != 'healthy'`
-	s.db.Pool().Exec(ctx, query, containerID)
+	cmd, err := s.db.Pool().Exec(ctx, query, containerID)
+	if err != nil {
+		log.Debug().Err(err).Str("container_id", containerID).Msg("Failed to mark container healthy")
+		return
+	}
+
+	if cmd.RowsAffected() > 0 {
+		go s.notifyPanelContainerStatus(containerID, "running", "healthy", nil, nil)
+	}
+}
+
+func (s *Scheduler) notifyPanelContainerStatus(containerID, status, healthStatus string, cpuUsage *float64, memoryUsage *float64) {
+	if s.cfg.PanelURL == "" {
+		return
+	}
+
+	url := fmt.Sprintf("%s/api/internal/containers/%s/status", s.cfg.PanelURL, containerID)
+
+	payload := map[string]interface{}{
+		"status":        status,
+		"health_status": healthStatus,
+	}
+	if cpuUsage != nil {
+		payload["cpu_usage"] = *cpuUsage
+	}
+	if memoryUsage != nil {
+		payload["memory_usage"] = *memoryUsage
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		log.Debug().Err(err).Str("container_id", containerID).Msg("Failed to marshal container callback payload")
+		return
+	}
+
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		log.Debug().Err(err).Str("container_id", containerID).Msg("Failed to create container callback request")
+		return
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+s.cfg.APIKey)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Debug().Err(err).Str("container_id", containerID).Msg("Failed to notify panel of container status")
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		log.Debug().
+			Int("status_code", resp.StatusCode).
+			Str("container_id", containerID).
+			Str("container_status", status).
+			Str("container_health_status", healthStatus).
+			Msg("Panel container callback returned error")
+	}
 }
 
 func (s *Scheduler) cleanupOldRepos() {

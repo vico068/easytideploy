@@ -313,6 +313,14 @@ class ApplicationResource extends Resource
                 Tables\Columns\TextColumn::make('status')
                     ->label('Status')
                     ->badge()
+                    ->formatStateUsing(fn (Application $record): string => $record->runtime_label)
+                    ->color(fn (Application $record): string => match ($record->runtime_state) {
+                        'up' => 'success',
+                        'down' => 'danger',
+                        'deploying' => 'warning',
+                        'failed' => 'danger',
+                        default => 'gray',
+                    })
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('containers_count')

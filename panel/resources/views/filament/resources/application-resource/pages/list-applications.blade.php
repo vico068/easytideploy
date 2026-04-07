@@ -4,7 +4,7 @@
         'fi-resource-' . str_replace('/', '-', $this->getResource()::getSlug()),
     ])
 >
-    <div class="flex flex-col gap-y-6" wire:poll.5000ms>
+    <div class="flex flex-col gap-y-6">
         <x-filament-panels::resources.tabs />
 
         {{-- Barra de controles: contagem + toggle de view --}}
@@ -18,18 +18,28 @@
                 </span>
 
                 @php
-                    $active   = $apps->filter(fn($a) => $a->status?->value === 'active')->count();
+                    $up       = $apps->filter(fn($a) => $a->runtime_state === 'up')->count();
+                    $down     = $apps->filter(fn($a) => $a->runtime_state === 'down')->count();
                     $deploying = $apps->filter(fn($a) => $a->status?->value === 'deploying')->count();
                     $failed   = $apps->filter(fn($a) => $a->status?->value === 'failed')->count();
                 @endphp
 
-                @if($active > 0)
+                @if($up > 0)
                     <span class="inline-flex items-center gap-1.5 text-xs font-semibold
                                  text-emerald-600 dark:text-emerald-400
                                  bg-emerald-50 dark:bg-emerald-500/10
                                  px-2.5 py-0.5 rounded-full">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                        {{ $active }} ativa{{ $active !== 1 ? 's' : '' }}
+                        {{ $up }} UP
+                    </span>
+                @endif
+                @if($down > 0)
+                    <span class="inline-flex items-center gap-1.5 text-xs font-semibold
+                                 text-rose-600 dark:text-rose-400
+                                 bg-rose-50 dark:bg-rose-500/10
+                                 px-2.5 py-0.5 rounded-full">
+                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                        {{ $down }} DOWN
                     </span>
                 @endif
                 @if($deploying > 0)
@@ -121,21 +131,24 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                     @foreach($apps as $index => $app)
                         @php
-                            $statusValue = $app->status?->value ?? $app->status;
+                            $statusValue = $app->runtime_state;
                             $statusDot = match($statusValue) {
-                                'active'    => 'bg-emerald-500',
+                                'up'        => 'bg-emerald-500',
+                                'down'      => 'bg-rose-500',
                                 'deploying' => 'bg-amber-500 animate-pulse',
                                 'failed'    => 'bg-red-500',
                                 default     => 'bg-slate-400',
                             };
                             $borderHover = match($statusValue) {
-                                'active'    => 'dark:hover:border-emerald-500/30 hover:border-emerald-300/60',
+                                'up'        => 'dark:hover:border-emerald-500/30 hover:border-emerald-300/60',
+                                'down'      => 'dark:hover:border-rose-500/30 hover:border-rose-300/60',
                                 'deploying' => 'dark:hover:border-amber-500/30 hover:border-amber-300/60',
                                 'failed'    => 'dark:hover:border-red-500/30 hover:border-red-300/60',
                                 default     => 'dark:hover:border-brand-500/30 hover:border-brand-300/60',
                             };
                             $glowColor = match($statusValue) {
-                                'active'    => 'bg-emerald-500/10',
+                                'up'        => 'bg-emerald-500/10',
+                                'down'      => 'bg-rose-500/10',
                                 'deploying' => 'bg-amber-500/10',
                                 'failed'    => 'bg-red-500/10',
                                 default     => 'bg-brand-500/10',

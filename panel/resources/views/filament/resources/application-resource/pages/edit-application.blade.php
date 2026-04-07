@@ -6,11 +6,12 @@
         ═══════════════════════════════════════════════════════ --}}
         @php
             $app = $this->record;
-            $statusVal = $app->status?->value ?? $app->status ?? 'stopped';
+            $statusVal = $app->runtime_state;
             $lastDeploy = $app->latestDeployment;
 
             $statusConfig = match($statusVal) {
-                'active'    => ['dot' => 'bg-emerald-500', 'text' => 'Ativa', 'badge' => 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'],
+                'up'        => ['dot' => 'bg-emerald-500', 'text' => 'UP', 'badge' => 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'],
+                'down'      => ['dot' => 'bg-rose-500', 'text' => 'DOWN', 'badge' => 'bg-rose-50 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400'],
                 'deploying' => ['dot' => 'bg-amber-500 animate-pulse', 'text' => 'Deployando', 'badge' => 'bg-amber-50 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400'],
                 'failed'    => ['dot' => 'bg-red-500', 'text' => 'Falhou', 'badge' => 'bg-red-50 text-red-700 dark:bg-red-500/15 dark:text-red-400'],
                 default     => ['dot' => 'bg-slate-400', 'text' => 'Parada', 'badge' => 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'],
@@ -136,7 +137,4 @@
         />
 
     </div>
-
-    {{-- Polling para manter status do header atualizado sem WebSocket --}}
-    <div wire:poll.5000ms="refreshStatus" class="hidden"></div>
 </x-filament-panels::page>

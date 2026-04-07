@@ -6,19 +6,20 @@
  * qualquer elemento `x-data`, inclusive os injetados via Livewire morphdom.
  */
 document.addEventListener('alpine:init', () => {
-    Alpine.data('deploymentLogs', (deploymentId, streamUrl, isTerminal, initialStatus) => ({
+    Alpine.data('deploymentLogs', (deploymentId, isTerminal, initialStatus, initialLogs = []) => ({
         deploymentId,
-        streamUrl,
         isTerminal,
+        initialLogs,
 
         logCount:      0,
         autoScroll:    true,
-        eventSource:   null,
+        channel:       null,
+        connectTimer:  null,
         finished:      isTerminal,
         seenLines:     new Set(),
         currentStatus: initialStatus || 'pending',
         sseState:      'connecting',
-        sseText:       'conectando...',
+        sseText:       'aguardando socket...',
 
         statusLabels: {
             pending:     'Pendente',
@@ -38,7 +39,19 @@ document.addEventListener('alpine:init', () => {
                     this.autoScroll = atBottom;
                 });
             }
-            this.connectSSE();
+
+            // Preload persisted logs so users opening a finished deployment still see history.
+            for (const line of this.initialLogs) {
+                this.addLogLine(line);
+            }
+
+            if (this.finished) {
+                this.sseState = 'connected';
+                this.sseText = 'completo';
+                return;
+            }
+
+            this.connectEcho();
         },
 
         destroy() {
@@ -106,65 +119,76 @@ document.addEventListener('alpine:init', () => {
             this.finished  = true;
             this.sseState  = 'connected';
             this.sseText   = 'completo';
-            if (this.eventSource) {
-                this.eventSource.close();
-                this.eventSource = null;
-            }
+            this.cleanup();
         },
 
-        connectSSE() {
+        connectEcho() {
             this.sseState = 'connecting';
-            this.sseText  = 'conectando...';
+            this.sseText  = 'conectando websocket...';
 
-            this.eventSource = new EventSource(this.streamUrl);
-
-            this.eventSource.onopen = () => {
-                this.sseState = 'connected';
-                this.sseText  = 'conectado';
-            };
-
-            this.eventSource.onerror = () => {
-                if (this.eventSource && this.eventSource.readyState === EventSource.CLOSED) {
-                    this.sseState = 'error';
-                    this.sseText  = 'desconectado';
-                } else {
-                    this.sseState = 'connecting';
-                    this.sseText  = 'reconectando...';
+            const bindChannel = () => {
+                if (!window.Echo) {
+                    return false;
                 }
+
+                this.channel = window.Echo.private('deployment.' + this.deploymentId)
+                    .listen('.BuildLogReceived', (event) => {
+                        if (event?.line) {
+                            this.addLogLine(event.line);
+                        }
+                    })
+                    .listen('.DeploymentStageChanged', (event) => {
+                        if (event?.stage && event?.status) {
+                            this.addLogLine('>>> ' + event.stage.toUpperCase() + ': ' + event.status);
+                        }
+                    })
+                    .listen('.DeploymentStatusChanged', (event) => {
+                        if (event?.status) {
+                            this.updateStatus(event.status);
+                            if (['running', 'failed', 'cancelled', 'rolled_back'].includes(event.status)) {
+                                this.finishStream();
+                            }
+                        }
+                    });
+
+                this.sseState = 'connected';
+                this.sseText = 'websocket ativo';
+                return true;
             };
 
-            this.eventSource.addEventListener('log', (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    if (data.line) this.addLogLine(data.line);
-                } catch (_) {}
-            });
+            if (bindChannel()) {
+                return;
+            }
 
-            this.eventSource.addEventListener('status', (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    if (data.status) this.updateStatus(data.status);
-                } catch (_) {}
-            });
+            let attempts = 0;
+            const maxAttempts = 20;
+            this.connectTimer = setInterval(() => {
+                attempts++;
 
-            this.eventSource.addEventListener('stage', (e) => {
-                try {
-                    const data = JSON.parse(e.data);
-                    if (data.stage && data.status) {
-                        this.addLogLine('>>> ' + data.stage.toUpperCase() + ': ' + data.status);
-                    }
-                } catch (_) {}
-            });
+                if (bindChannel()) {
+                    clearInterval(this.connectTimer);
+                    this.connectTimer = null;
+                    return;
+                }
 
-            this.eventSource.addEventListener('done', () => {
-                this.finishStream();
-            });
+                if (attempts >= maxAttempts) {
+                    clearInterval(this.connectTimer);
+                    this.connectTimer = null;
+                    this.sseState = 'error';
+                    this.sseText = 'falha ao conectar websocket';
+                }
+            }, 500);
         },
 
         cleanup() {
-            if (this.eventSource) {
-                this.eventSource.close();
-                this.eventSource = null;
+            if (this.connectTimer) {
+                clearInterval(this.connectTimer);
+                this.connectTimer = null;
+            }
+
+            if (this.channel && window.Echo) {
+                window.Echo.leave('deployment.' + this.deploymentId);
+                this.channel = null;
             }
         },
     }));

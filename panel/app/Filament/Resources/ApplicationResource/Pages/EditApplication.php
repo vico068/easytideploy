@@ -25,6 +25,7 @@ class EditApplication extends EditRecord
         return [
             // Echo events para atualização em tempo real
             "echo-private:application.{$appId},DeploymentStatusChanged" => 'refreshStatus',
+            "echo-private:application.{$appId},ContainerStatusChanged" => 'refreshStatus',
         ];
     }
 
@@ -70,6 +71,8 @@ class EditApplication extends EditRecord
         try {
             $deploymentService = app(DeploymentService::class);
             $deployment = $deploymentService->trigger($this->record);
+
+            $this->refreshStatus();
 
             // Avisa o DeploymentsRelationManager para recarregar a tabela imediatamente
             $this->dispatch('deployment-triggered');
