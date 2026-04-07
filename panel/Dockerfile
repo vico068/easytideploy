@@ -19,9 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     zip \
     unzip \
-    supervisor \
-    nginx \
-    php8.2-fpm \
     php8.2-cli \
     php8.2-pgsql \
     php8.2-zip \
@@ -33,8 +30,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     php8.2-redis \
     php8.2-opcache \
     && ln -sf /usr/bin/php8.2 /usr/local/bin/php \
-    && ln -sf /usr/sbin/php-fpm8.2 /usr/local/sbin/php-fpm \
-    && sed -i 's|^listen = .*|listen = 9000|' /etc/php/8.2/fpm/pool.d/www.conf \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Composer (used for dump-autoload and artisan commands)
@@ -73,11 +68,8 @@ RUN chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
 # Copy PHP config
-COPY docker/php.ini /etc/php/8.2/fpm/conf.d/99-easydeploy.ini
 COPY docker/php.ini /etc/php/8.2/cli/conf.d/99-easydeploy.ini
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
-COPY docker/supervisord.conf /etc/supervisord.conf
 
 EXPOSE 8000
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisord.conf"]
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
