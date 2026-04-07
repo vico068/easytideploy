@@ -1,8 +1,15 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
+ENV NODE_OPTIONS="--max-old-space-size=8192" \
+    NPM_CONFIG_AUDIT="false" \
+    NPM_CONFIG_FUND="false" \
+    NPM_CONFIG_UPDATE_NOTIFIER="false" \
+    npm_config_jobs="1" \
+    NPM_CONFIG_MAX_CONCURRENT=1
+
 COPY package*.json ./
-RUN npm ci 2>/dev/null || npm install
+RUN npm ci --maxsockets 1 2>/dev/null || npm install --maxsockets 1
 
 COPY . .
 
