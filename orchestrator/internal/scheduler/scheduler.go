@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -22,6 +23,7 @@ import (
 	"github.com/easyti/easydeploy/orchestrator/pkg/buildpack"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"gopkg.in/yaml.v3"
 )
 
 // DeploymentStatus represents the status of a deployment
@@ -517,15 +519,20 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 
 	logger.Info().Msg("All new containers are healthy")
 
-	// Update Traefik configuration to point to new containers
+	// Update Traefik configuration before cleanup so traffic can shift to new containers.
 	if err := s.updateTraefikConfig(ctx, job.ApplicationID); err != nil {
-		logger.Warn().Err(err).Msg("Failed to update Traefik config")
+		return fmt.Errorf("failed to update traefik config before cleanup: %w", err)
 	}
 
 	logger.Info().Msg("Traefik configuration updated, now cleaning up old containers")
 
 	// Now that new containers are healthy and Traefik is updated, cleanup old containers
 	s.cleanupOldContainers(ctx, job.ApplicationID, job.DeploymentID, logger)
+
+	// Regenerate and verify routes after cleanup to ensure only current deployment backends remain.
+	if err := s.ensureTraefikRoutesForDeployment(ctx, job.ApplicationID, job.DeploymentID); err != nil {
+		return fmt.Errorf("failed to ensure traefik routes for deployment: %w", err)
+	}
 
 	logger.Info().Msg("Zero-downtime deployment completed successfully")
 
@@ -776,10 +783,144 @@ func (s *Scheduler) cleanupOldContainers(ctx context.Context, applicationID, cur
 
 func (s *Scheduler) updateTraefikConfig(ctx context.Context, applicationID string) error {
 	if s.traefikGen == nil {
-		log.Warn().Str("app_id", applicationID).Msg("Traefik config generator not set, skipping config update")
-		return nil
+		return fmt.Errorf("traefik config generator not set")
 	}
 	return s.traefikGen.GenerateConfig(ctx, applicationID)
+}
+
+func (s *Scheduler) ensureTraefikRoutesForDeployment(ctx context.Context, applicationID, deploymentID string) error {
+	if err := s.updateTraefikConfig(ctx, applicationID); err != nil {
+		return err
+	}
+
+	expectedURLs, err := s.getDeploymentBackendURLs(ctx, applicationID, deploymentID)
+	if err != nil {
+		return fmt.Errorf("failed to list deployment backends: %w", err)
+	}
+
+	if len(expectedURLs) == 0 {
+		return fmt.Errorf("no healthy running containers found for deployment %s", deploymentID)
+	}
+
+	actualURLs, err := s.readTraefikBackendURLs(applicationID)
+	if err != nil {
+		return fmt.Errorf("failed to read traefik backend urls: %w", err)
+	}
+
+	if !sameStringSet(expectedURLs, actualURLs) {
+		return fmt.Errorf("traefik backends mismatch: expected=%v actual=%v", expectedURLs, actualURLs)
+	}
+
+	log.Info().
+		Str("application_id", applicationID).
+		Str("deployment_id", deploymentID).
+		Int("backends", len(actualURLs)).
+		Msg("Traefik route validated for deployment")
+
+	return nil
+}
+
+func (s *Scheduler) getDeploymentBackendURLs(ctx context.Context, applicationID, deploymentID string) ([]string, error) {
+	query := `
+		SELECT host(s.ip_address), COALESCE(c.host_port, 0), COALESCE(c.internal_port, 0)
+		FROM containers c
+		JOIN servers s ON c.server_id = s.id
+		WHERE c.application_id = $1
+		  AND c.deployment_id = $2
+		  AND c.status = 'running'
+		  AND c.health_status = 'healthy'
+	`
+
+	rows, err := s.db.Pool().Query(ctx, query, applicationID, deploymentID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	urls := make([]string, 0)
+	for rows.Next() {
+		var serverIP string
+		var hostPort int
+		var internalPort int
+		if err := rows.Scan(&serverIP, &hostPort, &internalPort); err != nil {
+			return nil, err
+		}
+
+		port := hostPort
+		if port == 0 {
+			port = internalPort
+		}
+		urls = append(urls, fmt.Sprintf("http://%s:%d", serverIP, port))
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	sort.Strings(urls)
+	return dedupeStrings(urls), nil
+}
+
+func (s *Scheduler) readTraefikBackendURLs(applicationID string) ([]string, error) {
+	configPath := filepath.Join(s.cfg.TraefikConfigDir, fmt.Sprintf("app-%s.yml", applicationID))
+
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var cfg traefik.DynamicConfig
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+
+	if cfg.HTTP == nil || len(cfg.HTTP.Services) == 0 {
+		return nil, fmt.Errorf("no services found in traefik config")
+	}
+
+	urls := make([]string, 0)
+	for _, svc := range cfg.HTTP.Services {
+		if svc == nil || svc.LoadBalancer == nil {
+			continue
+		}
+		for _, server := range svc.LoadBalancer.Servers {
+			if server.URL != "" {
+				urls = append(urls, server.URL)
+			}
+		}
+	}
+
+	sort.Strings(urls)
+	return dedupeStrings(urls), nil
+}
+
+func sameStringSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func dedupeStrings(values []string) []string {
+	if len(values) == 0 {
+		return values
+	}
+
+	result := make([]string, 0, len(values))
+	last := ""
+	for i, v := range values {
+		if i == 0 || v != last {
+			result = append(result, v)
+			last = v
+		}
+	}
+
+	return result
 }
 
 func (s *Scheduler) runHealthChecks() {
