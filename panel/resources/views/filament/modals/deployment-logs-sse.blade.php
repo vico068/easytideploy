@@ -4,6 +4,7 @@
     $statusValue  = $deployment->status->value;
     $initialLogs  = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', (string) ($deployment->build_logs ?? '')))));
     $logsUrl      = route('deployments.logs.show', $deployment);
+    $streamUrl    = route('deployments.logs.stream', $deployment);
 @endphp
 
 {{-- Componente Alpine registrado em public/js/deployment-logs.js via alpine:init --}}
@@ -96,7 +97,8 @@
          '{{ $statusValue }}',
          @js($initialLogs),
          '{{ $logsUrl }}',
-         '{{ $deployment->application_id }}'
+         '{{ $deployment->application_id }}',
+         '{{ $streamUrl }}'
      )"
      x-on:remove.window="cleanup()">
 

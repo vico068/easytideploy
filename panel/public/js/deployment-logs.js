@@ -6,21 +6,26 @@
  * qualquer elemento `x-data`, inclusive os injetados via Livewire morphdom.
  */
 document.addEventListener('alpine:init', () => {
-    Alpine.data('deploymentLogs', (deploymentId, isTerminal, initialStatus, initialLogs = [], logsUrl = null, applicationId = null) => ({
+    Alpine.data('deploymentLogs', (deploymentId, isTerminal, initialStatus, initialLogs = [], logsUrl = null, applicationId = null, streamUrl = null) => ({
         deploymentId,
         isTerminal,
         initialLogs,
         logsUrl,
         applicationId,
+        streamUrl,
 
         logCount:      0,
         autoScroll:    true,
         channel:       null,
         appChannel:    null,
+        sse:           null,
         connectTimer:  null,
+        watchdogTimer: null,
         finished:      isTerminal,
         seenLines:     new Set(),
         currentStatus: initialStatus || 'pending',
+        lastStatusEvent: null,
+        lastActivityAt: Date.now(),
         sseState:      'connecting',
         sseText:       'aguardando socket...',
         streamedLogLines: 0,
@@ -58,6 +63,7 @@ document.addEventListener('alpine:init', () => {
             }
 
             this.connectEcho();
+            this.startRealtimeWatchdog();
         },
 
         destroy() {
@@ -86,6 +92,8 @@ document.addEventListener('alpine:init', () => {
 
         addLogLine(line, countAsStream = true) {
             if (!line || line.trim() === '') return;
+
+            this.markActivity();
 
             const hash = line.substring(0, 120);
             if (this.seenLines.has(hash)) return;
@@ -119,6 +127,7 @@ document.addEventListener('alpine:init', () => {
 
         addSystemLine(line) {
             // System lines should always be rendered, even if a similar hash exists.
+            this.markActivity();
             this.logCount++;
 
             const body   = this.terminalBody();
@@ -160,10 +169,15 @@ document.addEventListener('alpine:init', () => {
         },
 
         updateStatus(status) {
+            this.markActivity();
             this.currentStatus = status;
             if (['running', 'failed', 'cancelled', 'rolled_back'].includes(status)) {
                 this.finished = true;
             }
+        },
+
+        markActivity() {
+            this.lastActivityAt = Date.now();
         },
 
         finishStream() {
@@ -240,6 +254,12 @@ document.addEventListener('alpine:init', () => {
 
                 const handleStatusEvent = (event) => {
                     if (event?.status) {
+                        const statusKey = String(event.status) + '|' + String(event?.error || '');
+                        if (this.lastStatusEvent === statusKey) {
+                            return;
+                        }
+                        this.lastStatusEvent = statusKey;
+
                         this.updateStatus(event.status);
                         this.addSystemLine('>>> STATUS: ' + String(event.status).toUpperCase());
 
@@ -289,15 +309,113 @@ document.addEventListener('alpine:init', () => {
                     clearInterval(this.connectTimer);
                     this.connectTimer = null;
                     this.sseState = 'error';
-                    this.sseText = 'falha ao conectar websocket';
+                    this.sseText = 'falha websocket, ativando sse';
+                    this.connectSSE();
                 }
             }, 500);
+        },
+
+        connectSSE() {
+            if (!this.streamUrl || this.sse || this.finished) {
+                return;
+            }
+
+            this.sse = new EventSource(this.streamUrl);
+
+            this.sse.addEventListener('log', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data?.line) {
+                        this.addLogLine(data.line);
+                    }
+                } catch (_) {
+                    // ignore malformed frames
+                }
+            });
+
+            this.sse.addEventListener('stage', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (data?.stage && data?.status) {
+                        this.addLogLine('>>> ' + data.stage.toUpperCase() + ': ' + data.status);
+                    }
+                } catch (_) {
+                    // ignore malformed frames
+                }
+            });
+
+            this.sse.addEventListener('status', (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+                    if (!data?.status) {
+                        return;
+                    }
+
+                    const statusKey = String(data.status) + '|' + String(data?.error || '');
+                    if (this.lastStatusEvent !== statusKey) {
+                        this.lastStatusEvent = statusKey;
+                        this.updateStatus(data.status);
+                        this.addSystemLine('>>> STATUS: ' + String(data.status).toUpperCase());
+                        if (data?.error) {
+                            this.addSystemLine('>>> ERRO: ' + data.error);
+                        }
+                    }
+
+                    if (['running', 'failed', 'cancelled', 'rolled_back'].includes(data.status)) {
+                        this.finishStream();
+                    }
+                } catch (_) {
+                    // ignore malformed frames
+                }
+            });
+
+            this.sse.addEventListener('done', () => {
+                this.finishStream();
+            });
+
+            this.sse.addEventListener('heartbeat', () => {
+                this.markActivity();
+            });
+
+            this.sse.onopen = () => {
+                this.markActivity();
+                this.sseState = 'connected';
+                this.sseText = 'sse backup ativo';
+            };
+
+            this.sse.onerror = () => {
+                // EventSource auto-reconnects by default.
+                this.sseState = 'error';
+                this.sseText = 'sse reconectando';
+            };
+        },
+
+        startRealtimeWatchdog() {
+            if (this.watchdogTimer) {
+                clearInterval(this.watchdogTimer);
+            }
+
+            this.watchdogTimer = setInterval(() => {
+                if (this.finished) {
+                    return;
+                }
+
+                const idleForMs = Date.now() - this.lastActivityAt;
+                if (idleForMs > 10000) {
+                    this.connectSSE();
+                }
+            }, 3000);
         },
 
         cleanup() {
             if (this.connectTimer) {
                 clearInterval(this.connectTimer);
                 this.connectTimer = null;
+            }
+
+            if (this.watchdogTimer) {
+                clearInterval(this.watchdogTimer);
+                this.watchdogTimer = null;
             }
 
             if (this.channel && window.Echo) {
@@ -308,6 +426,11 @@ document.addEventListener('alpine:init', () => {
             if (this.appChannel && window.Echo && this.applicationId) {
                 window.Echo.leave('application.' + this.applicationId);
                 this.appChannel = null;
+            }
+
+            if (this.sse) {
+                this.sse.close();
+                this.sse = null;
             }
         },
     }));
