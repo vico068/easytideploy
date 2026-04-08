@@ -201,68 +201,79 @@
          BALANCING DIAGRAM
     ============================================================ --}}
     <div class="bg-white dark:bg-slate-900/60/50 rounded-2xl border border-gray-100 dark:border-white/5 p-5 shadow-sm">
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
                 <h3 class="text-sm font-semibold text-gray-900 dark:text-white">Diagrama de Balanceamento</h3>
-                <p class="text-xs text-slate-400 mt-0.5">Fluxo atual do Balanceador EasyTI para as réplicas da aplicação</p>
+                <p class="text-xs text-slate-400 mt-0.5">Topologia ativa do tráfego entre o Balanceador EasyTI e as réplicas da aplicação</p>
             </div>
-            <span class="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800/70 px-2.5 py-1 rounded-lg">
-                {{ $containers->count() }}/{{ $selectedApp->replicas }} replicas online
-            </span>
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 rounded-lg">
+                    <x-heroicon-s-check-circle class="w-4 h-4" />
+                    {{ $containers->count() }} online
+                </span>
+                <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/70 px-2.5 py-1 rounded-lg">
+                    <x-heroicon-s-server-stack class="w-4 h-4" />
+                    {{ $selectedApp->replicas }} configuradas
+                </span>
+            </div>
         </div>
 
         @php
             $desiredReplicas = max(1, (int) $selectedApp->replicas);
+            $mermaidLines = [
+                'flowchart LR',
+                'LB["Balancer EasyTI"]',
+            ];
+
+            for ($i = 0; $i < $desiredReplicas; $i++) {
+                $replica = $containers->firstWhere('replica_index', $i);
+                $replicaNode = 'R' . $i;
+                $replicaStatus = $replica ? 'online' : 'offline';
+                $mermaidLines[] = sprintf('%s["Replica %d\\n%s"]', $replicaNode, $i, $replicaStatus);
+                $mermaidLines[] = sprintf('LB --> %s', $replicaNode);
+                $mermaidLines[] = sprintf('class %s %s', $replicaNode, $replica ? 'replicaOn' : 'replicaOff');
+            }
+
+            $mermaidLines[] = 'class LB balancer';
+            $mermaidLines[] = 'classDef balancer fill:#0b4a6f,stroke:#06b6d4,stroke-width:2.5px,color:#e2f6ff;';
+            $mermaidLines[] = 'classDef replicaOn fill:#0f766e,stroke:#14b8a6,stroke-width:2px,color:#ecfeff;';
+            $mermaidLines[] = 'classDef replicaOff fill:#9f1239,stroke:#fb7185,stroke-width:2px,color:#fff1f2;';
+            $mermaidDiagram = implode("\n", $mermaidLines);
         @endphp
 
-        <div class="flex flex-col lg:flex-row lg:items-start gap-4 lg:gap-6">
-            <div class="lg:w-64 shrink-0">
-                <div class="rounded-xl border border-sky-200 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-500/10 p-4 text-center">
-                    <div class="text-xs uppercase tracking-wide text-sky-600 dark:text-sky-300 font-semibold">Balancer EasyTI</div>
-                    <div class="mt-2 text-sm font-bold text-sky-800 dark:text-sky-200">{{ $selectedApp->name }}</div>
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div class="xl:col-span-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-slate-900/60 p-4" wire:ignore>
+                <div id="lbMermaidSource" class="hidden">{{ $mermaidDiagram }}</div>
+                <div id="lbMermaidDiagram" class="min-h-[260px] flex items-center justify-center"></div>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-slate-950/50 p-4">
+                <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-3">Status das Réplicas</h4>
+                <div class="space-y-2.5 max-h-[260px] overflow-auto pr-1">
+                    @for($i = 0; $i < $desiredReplicas; $i++)
+                        @php
+                            $replica = $containers->firstWhere('replica_index', $i);
+                            $isOnline = (bool) $replica;
+                        @endphp
+
+                        <div class="rounded-lg border px-3 py-2 {{ $isOnline ? 'border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10' : 'border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10' }}">
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-xs font-semibold text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5">
+                                    <x-heroicon-o-cube class="w-4 h-4" />
+                                    Replica {{ $i }}
+                                </span>
+                                <span class="text-[11px] font-semibold inline-flex items-center gap-1 {{ $isOnline ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300' }}">
+                                    <span class="w-2 h-2 rounded-full {{ $isOnline ? 'bg-emerald-500' : 'bg-rose-500' }}"></span>
+                                    {{ $isOnline ? 'online' : 'offline' }}
+                                </span>
+                            </div>
+
+                            <div class="mt-1 text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                                {{ $isOnline ? $replica->name : 'Aguardando reposicao automatica' }}
+                            </div>
+                        </div>
+                    @endfor
                 </div>
-            </div>
-
-            <div class="hidden lg:flex items-center justify-center w-12 pt-5">
-                <svg viewBox="0 0 64 24" class="w-12 h-6 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M2 12 H58" />
-                    <path d="M50 5 L58 12 L50 19" />
-                </svg>
-            </div>
-
-            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 flex-1">
-                @for($i = 0; $i < $desiredReplicas; $i++)
-                    @php
-                        $replica = $containers->firstWhere('replica_index', $i);
-                        $isOnline = (bool) $replica;
-                        $dotClass = $isOnline
-                            ? 'bg-emerald-500'
-                            : 'bg-rose-500';
-                        $cardClass = $isOnline
-                            ? 'border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10'
-                            : 'border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10';
-                    @endphp
-
-                    <div class="rounded-xl border p-3 {{ $cardClass }}">
-                        <div class="flex items-center justify-between gap-2">
-                            <span class="text-xs font-semibold text-slate-700 dark:text-slate-200">
-                                Sua Aplicacao - Replica {{ $i }}
-                            </span>
-                            <span class="inline-flex items-center gap-1 text-[11px] font-semibold {{ $isOnline ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300' }}">
-                                <span class="w-2 h-2 rounded-full {{ $dotClass }}"></span>
-                                {{ $isOnline ? 'online' : 'offline' }}
-                            </span>
-                        </div>
-
-                        <div class="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
-                            @if($isOnline)
-                                container: {{ $replica->name }}
-                            @else
-                                aguardando reposicao
-                            @endif
-                        </div>
-                    </div>
-                @endfor
             </div>
         </div>
     </div>
@@ -453,6 +464,7 @@
 
 @assets
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js" crossorigin="anonymous"></script>
 @endassets
 
 @script
@@ -668,6 +680,65 @@
         // Auto-scroll logs
         const lc = document.getElementById('logsContainer');
         if (lc) lc.scrollTop = lc.scrollHeight;
+
+        void initLoadBalancerDiagram();
+    }
+
+    async function initLoadBalancerDiagram() {
+        const source = document.getElementById('lbMermaidSource');
+        const target = document.getElementById('lbMermaidDiagram');
+        if (!source || !target || !window.mermaid) return;
+
+        const code = source.textContent?.trim();
+        if (!code) return;
+
+        const isDarkMode = document.documentElement.classList.contains('dark');
+
+        mermaid.initialize({
+            startOnLoad: false,
+            securityLevel: 'loose',
+            theme: isDarkMode ? 'dark' : 'default',
+            themeVariables: {
+                fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+                primaryColor: isDarkMode ? '#0b4a6f' : '#e0f2fe',
+                primaryBorderColor: isDarkMode ? '#06b6d4' : '#0284c7',
+                primaryTextColor: isDarkMode ? '#e2f6ff' : '#0c4a6e',
+                secondaryColor: isDarkMode ? '#0f766e' : '#ccfbf1',
+                secondaryBorderColor: isDarkMode ? '#14b8a6' : '#0f766e',
+                tertiaryColor: isDarkMode ? '#1e293b' : '#f8fafc',
+                tertiaryBorderColor: isDarkMode ? '#334155' : '#cbd5e1',
+                lineColor: isDarkMode ? '#38bdf8' : '#0284c7',
+                nodeBorder: isDarkMode ? '#06b6d4' : '#0ea5e9',
+                mainBkg: isDarkMode ? '#0f172a' : '#f8fafc',
+                clusterBkg: isDarkMode ? '#0b1220' : '#f0f9ff',
+                clusterBorder: isDarkMode ? '#1e3a5f' : '#bae6fd',
+            },
+            flowchart: {
+                curve: 'basis',
+                nodeSpacing: 40,
+                rankSpacing: 50,
+                padding: 10,
+                htmlLabels: true,
+            },
+        });
+
+        try {
+            const diagramId = `lb-${Date.now()}`;
+            const { svg } = await mermaid.render(diagramId, code);
+            target.innerHTML = svg;
+
+            // EasyTI finishing touch: subtle glow and cleaner labels in both themes.
+            const renderedSvg = target.querySelector('svg');
+            if (renderedSvg) {
+                renderedSvg.style.maxWidth = '100%';
+                renderedSvg.style.height = 'auto';
+                renderedSvg.style.filter = isDarkMode
+                    ? 'drop-shadow(0 8px 22px rgba(14,165,233,0.25))'
+                    : 'drop-shadow(0 6px 16px rgba(14,165,233,0.18))';
+            }
+        } catch (error) {
+            target.innerHTML = '<p class="text-xs text-rose-500">Nao foi possivel renderizar o diagrama de balanceamento.</p>';
+        }
     }
 
     // Initial render
