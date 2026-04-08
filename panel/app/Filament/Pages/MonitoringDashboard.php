@@ -52,6 +52,7 @@ class MonitoringDashboard extends Page
         // Initialize previous container statuses for change detection
         if ($this->selectedAppId) {
             $this->previousContainerStatuses = Container::where('application_id', $this->selectedAppId)
+                ->where('status', 'running')
                 ->pluck('status', 'id')
                 ->toArray();
         }
@@ -121,11 +122,13 @@ class MonitoringDashboard extends Page
         $httpChartData = ['labels' => [], '2xx' => [], '3xx' => [], '4xx' => [], '5xx' => []];
 
         if ($selectedApp) {
-            $containers = Container::where('application_id', $selectedApp->id)->get();
-            $runningContainers = $containers->where('status', 'running')->count();
+            $containers = Container::where('application_id', $selectedApp->id)
+                ->where('status', 'running')
+                ->get();
+            $runningContainers = $containers->count();
 
             // CPU/RAM from resource_usages (last 5 minutes average)
-            $containerIds = $containers->where('status', 'running')->pluck('id')->toArray();
+            $containerIds = $containers->pluck('id')->toArray();
             $recentStats = null;
             if (! empty($containerIds)) {
                 $recentStats = ResourceUsage::whereIn('container_id', $containerIds)

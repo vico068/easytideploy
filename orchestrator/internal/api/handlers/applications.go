@@ -215,6 +215,9 @@ func (h *ApplicationHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *ApplicationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
+	// Mark application as stopped before stopping containers to avoid self-heal reconciliation.
+	h.repo.UpdateApplicationStatus(r.Context(), id, "stopped")
+
 	// Stop all containers first
 	containers, _ := h.repo.ListContainersByApplication(r.Context(), id)
 	for _, c := range containers {
@@ -336,6 +339,9 @@ func (h *ApplicationHandler) Scale(w http.ResponseWriter, r *http.Request) {
 func (h *ApplicationHandler) Stop(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
+	// Mark as stopped before iterating containers so StopContainer does not trigger self-heal.
+	h.repo.UpdateApplicationStatus(r.Context(), id, "stopped")
+
 	containers, err := h.repo.ListContainersByApplication(r.Context(), id)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to get containers")
@@ -345,9 +351,6 @@ func (h *ApplicationHandler) Stop(w http.ResponseWriter, r *http.Request) {
 	for _, c := range containers {
 		h.scheduler.StopContainer(r.Context(), c.ID)
 	}
-
-	// Update application status
-	h.repo.UpdateApplicationStatus(r.Context(), id, "stopped")
 
 	respondJSON(w, http.StatusOK, map[string]string{
 		"id":     id,

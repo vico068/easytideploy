@@ -125,6 +125,18 @@ class OrchestratorClient
             ->throw()->json();
     }
 
+    public function stopContainer(string $containerId): array
+    {
+        return $this->http->post("/api/v1/containers/{$containerId}/stop")
+            ->throw()->json();
+    }
+
+    public function restartContainer(string $containerId): array
+    {
+        return $this->http->post("/api/v1/containers/{$containerId}/restart")
+            ->throw()->json();
+    }
+
     public function deleteTraefikConfig(Application $app): array
     {
         return $this->http->delete("/api/v1/proxy/config/{$app->id}")

@@ -218,8 +218,8 @@
                                             bg-slate-50/80 dark:bg-slate-800/40 rounded-xl
                                             border border-slate-100 dark:border-white/[0.04]">
                                     <div class="text-center">
-                                        <div class="text-sm font-bold text-gray-900 dark:text-white tabular-nums">
-                                            {{ $app->containers_count }}
+                                            <div class="text-sm font-bold text-gray-900 dark:text-white tabular-nums">
+                                                {{ $app->running_containers_count }}/{{ $app->replicas }}
                                         </div>
                                         <div class="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">containers</div>
                                     </div>

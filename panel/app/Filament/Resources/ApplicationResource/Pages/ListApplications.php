@@ -36,7 +36,7 @@ class ListApplications extends ListRecords
     public function getApplications()
     {
         return Application::with(['latestDeployment', 'containers'])
-            ->withCount('containers')
+            ->withCount(['runningContainers as running_containers_count'])
             ->orderByDesc('updated_at')
             ->get();
     }

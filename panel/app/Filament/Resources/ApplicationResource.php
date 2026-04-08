@@ -14,6 +14,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 
 class ApplicationResource extends Resource
@@ -29,6 +30,12 @@ class ApplicationResource extends Resource
     protected static ?string $modelLabel = 'Aplicação';
 
     protected static ?string $pluralModelLabel = 'Aplicações';
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->withCount(['runningContainers as running_containers_count']);
+    }
 
     public static function form(Form $form): Form
     {
@@ -327,13 +334,13 @@ class ApplicationResource extends Resource
                     })
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('containers_count')
-                    ->counts('containers')
+                Tables\Columns\TextColumn::make('running_containers_count')
                     ->label('Containers')
+                    ->state(fn (Application $record): string => sprintf('%d/%d', $record->running_containers_count ?? 0, $record->replicas))
                     ->alignCenter()
                     ->sortable()
                     ->badge()
-                    ->color(fn ($state) => $state > 0 ? 'success' : 'gray'),
+                    ->color(fn (Application $record) => ($record->running_containers_count ?? 0) > 0 ? 'success' : 'gray'),
 
                 Tables\Columns\TextColumn::make('primaryDomain.domain')
                     ->label('Domínio')

@@ -21,6 +21,7 @@ import (
 	"github.com/easyti/easydeploy/orchestrator/internal/queue"
 	"github.com/easyti/easydeploy/orchestrator/internal/traefik"
 	"github.com/easyti/easydeploy/orchestrator/pkg/buildpack"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v3"
@@ -471,10 +472,10 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 			return fmt.Errorf("failed to pull image on agent: %w", err)
 		}
 
-		// Create container with deployment ID in name to ensure uniqueness across deploys
+		// Create container as staged replica using _deploy suffix.
 		containerResult, err := client.CreateContainer(ctx, &DeployRequest{
 			ImageName: fmt.Sprintf("%s:%s", result.AgentImageName, result.ImageTag),
-			Name:      fmt.Sprintf("%s-%s-%d", job.ApplicationID, job.DeploymentID[:8], i),
+			Name:      fmt.Sprintf("%s-replica-%d_deploy", job.ApplicationID, i),
 			EnvVars:   job.Environment,
 			Port:      job.Port,
 			CPULimit:  int64(job.CPULimit),
@@ -491,7 +492,7 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 		}
 
 		// Save container to database
-		if err := s.saveContainer(ctx, job.DeploymentID, job.ApplicationID, server.ID, containerResult.ContainerID, int(containerResult.HostPort), job.Port, i); err != nil {
+		if err := s.saveContainer(ctx, job.DeploymentID, job.ApplicationID, server.ID, containerResult.ContainerID, fmt.Sprintf("%s-replica-%d_deploy", job.ApplicationID, i), int(containerResult.HostPort), job.Port, i); err != nil {
 			logger.Error().Err(err).Msg("Failed to save container to database")
 		}
 
@@ -519,15 +520,18 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 
 	logger.Info().Msg("All new containers are healthy")
 
-	// Update Traefik configuration before cleanup so traffic can shift to new containers.
-	if err := s.updateTraefikConfig(ctx, job.ApplicationID); err != nil {
-		return fmt.Errorf("failed to update traefik config before cleanup: %w", err)
+	// Cleanup old replicas from previous deployment.
+	s.cleanupOldContainers(ctx, job.ApplicationID, job.DeploymentID, logger)
+
+	// Promote staged _deploy names to final names after old replicas are gone.
+	if err := s.promoteDeploymentContainerNames(ctx, job.ApplicationID, job.DeploymentID); err != nil {
+		return fmt.Errorf("failed to promote deployment container names: %w", err)
 	}
 
-	logger.Info().Msg("Traefik configuration updated, now cleaning up old containers")
-
-	// Now that new containers are healthy and Traefik is updated, cleanup old containers
-	s.cleanupOldContainers(ctx, job.ApplicationID, job.DeploymentID, logger)
+	// Refresh Traefik after promotion/cleanup so load-balancer points to current replicas only.
+	if err := s.updateTraefikConfig(ctx, job.ApplicationID); err != nil {
+		return fmt.Errorf("failed to update traefik config after cleanup: %w", err)
+	}
 
 	// Regenerate and verify routes after cleanup to ensure only current deployment backends remain.
 	if err := s.ensureTraefikRoutesForDeployment(ctx, job.ApplicationID, job.DeploymentID); err != nil {
@@ -694,19 +698,39 @@ func (s *Scheduler) notifyPanel(callbackURL string, status DeploymentStatus, err
 	}
 }
 
-func (s *Scheduler) saveContainer(ctx context.Context, deploymentID, appID, serverID, containerID string, hostPort, internalPort, replica int) error {
+func (s *Scheduler) saveContainer(ctx context.Context, deploymentID, appID, serverID, containerID, name string, hostPort, internalPort, replica int) error {
 	query := `
 		INSERT INTO containers (id, deployment_id, application_id, server_id, docker_container_id, name, host_port, internal_port, status, health_status, replica_index, created_at, updated_at)
 		VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, 'running', 'healthy', $8, NOW(), NOW())
 		RETURNING id
 	`
-	name := fmt.Sprintf("%s-replica-%d", appID, replica)
+	if strings.TrimSpace(name) == "" {
+		name = fmt.Sprintf("%s-replica-%d", appID, replica)
+	}
 	var dbContainerID string
 	if err := s.db.Pool().QueryRow(ctx, query, deploymentID, appID, serverID, containerID, name, hostPort, internalPort, replica).Scan(&dbContainerID); err != nil {
 		return err
 	}
 
 	go s.notifyPanelContainerStatus(dbContainerID, "running", "healthy", nil, nil)
+
+	return nil
+}
+
+func (s *Scheduler) promoteDeploymentContainerNames(ctx context.Context, applicationID, deploymentID string) error {
+	query := `
+		UPDATE containers
+		SET name = application_id || '-replica-' || replica_index,
+		    updated_at = NOW()
+		WHERE application_id = $1
+		  AND deployment_id = $2
+		  AND status = 'running'
+		  AND name LIKE '%_deploy'
+	`
+
+	if _, err := s.db.Pool().Exec(ctx, query, applicationID, deploymentID); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -930,8 +954,33 @@ func (s *Scheduler) runHealthChecks() {
 		select {
 		case <-s.healthTicker.C:
 			s.checkAllContainers()
+			s.reconcileAllActiveApplications()
 		case <-s.stopCh:
 			return
+		}
+	}
+}
+
+func (s *Scheduler) reconcileAllActiveApplications() {
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+
+	query := `SELECT id FROM applications WHERE status = 'active'`
+	rows, err := s.db.Pool().Query(ctx, query)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to query active applications for replica reconciliation")
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var appID string
+		if err := rows.Scan(&appID); err != nil {
+			continue
+		}
+
+		if err := s.reconcileApplicationReplicas(ctx, appID); err != nil {
+			log.Warn().Err(err).Str("application_id", appID).Msg("Replica reconciliation failed")
 		}
 	}
 }
@@ -1206,14 +1255,14 @@ func (s *Scheduler) RestartContainer(ctx context.Context, containerID string) er
 func (s *Scheduler) StopContainer(ctx context.Context, containerID string) error {
 	// Get container info from database
 	query := `
-		SELECT c.docker_container_id, s.id, s.agent_address
+		SELECT c.docker_container_id, s.id, s.agent_address, c.application_id
 		FROM containers c
 		JOIN servers s ON c.server_id = s.id
 		WHERE c.id = $1
 	`
 
-	var dockerID, serverID, agentAddress string
-	err := s.db.Pool().QueryRow(ctx, query, containerID).Scan(&dockerID, &serverID, &agentAddress)
+	var dockerID, serverID, agentAddress, applicationID string
+	err := s.db.Pool().QueryRow(ctx, query, containerID).Scan(&dockerID, &serverID, &agentAddress, &applicationID)
 	if err != nil {
 		return fmt.Errorf("container not found: %w", err)
 	}
@@ -1229,8 +1278,290 @@ func (s *Scheduler) StopContainer(ctx context.Context, containerID string) error
 
 	// Update database
 	updateQuery := `UPDATE containers SET status = 'stopped', updated_at = NOW() WHERE id = $1`
-	_, err = s.db.Pool().Exec(ctx, updateQuery, containerID)
-	return err
+	if _, err = s.db.Pool().Exec(ctx, updateQuery, containerID); err != nil {
+		return err
+	}
+
+	go s.notifyPanelContainerStatus(containerID, "stopped", "unknown", nil, nil)
+
+	if err := s.reconcileApplicationReplicas(ctx, applicationID); err != nil {
+		return fmt.Errorf("container stopped but failed to reconcile replicas: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Scheduler) reconcileApplicationReplicas(ctx context.Context, applicationID string) error {
+	var appStatus string
+	var desiredReplicas, appPort, cpuLimit, memoryLimit int
+
+	appQuery := `
+		SELECT status, replicas, port, cpu_limit, memory_limit
+		FROM applications
+		WHERE id = $1
+	`
+	if err := s.db.Pool().QueryRow(ctx, appQuery, applicationID).Scan(&appStatus, &desiredReplicas, &appPort, &cpuLimit, &memoryLimit); err != nil {
+		return fmt.Errorf("failed to load application state: %w", err)
+	}
+
+	if appStatus != "active" {
+		return nil
+	}
+
+	if desiredReplicas <= 0 {
+		desiredReplicas = 1
+	}
+
+	if err := s.cleanupUnhealthyReplicas(ctx, applicationID); err != nil {
+		return fmt.Errorf("failed to cleanup unhealthy replicas: %w", err)
+	}
+
+	var runningReplicas int
+	countQuery := `SELECT COUNT(*) FROM containers WHERE application_id = $1 AND status = 'running' AND health_status = 'healthy'`
+	if err := s.db.Pool().QueryRow(ctx, countQuery, applicationID).Scan(&runningReplicas); err != nil {
+		return fmt.Errorf("failed to count running replicas: %w", err)
+	}
+
+	if runningReplicas >= desiredReplicas {
+		return nil
+	}
+
+	missingReplicas := desiredReplicas - runningReplicas
+
+	var templateDeploymentID, imageName, imageTag string
+	templateQuery := `
+		SELECT c.deployment_id, d.image_name, d.image_tag
+		FROM containers c
+		JOIN deployments d ON d.id = c.deployment_id
+		WHERE c.application_id = $1
+		  AND c.status = 'running'
+		  AND COALESCE(d.image_name, '') <> ''
+		  AND COALESCE(d.image_tag, '') <> ''
+		ORDER BY c.created_at DESC
+		LIMIT 1
+	`
+	templateErr := s.db.Pool().QueryRow(ctx, templateQuery, applicationID).Scan(&templateDeploymentID, &imageName, &imageTag)
+	if templateErr != nil {
+		log.Warn().
+			Str("application_id", applicationID).
+			Int("missing", missingReplicas).
+			Err(templateErr).
+			Msg("Missing container image metadata for direct self-heal; enqueuing self-heal deployment")
+		return s.enqueueSelfHealDeployment(ctx, applicationID)
+	}
+
+	envVars, err := s.getApplicationEnvironment(ctx, applicationID)
+	if err != nil {
+		return fmt.Errorf("failed to load application environment: %w", err)
+	}
+
+	imageRef := fmt.Sprintf("%s:%s", imageName, imageTag)
+	created := 0
+
+	for i := 0; i < missingReplicas; i++ {
+		replicaIndex, err := s.nextReplicaIndex(ctx, applicationID)
+		if err != nil {
+			return fmt.Errorf("failed to allocate replica index: %w", err)
+		}
+
+		server, err := s.SelectServer(cpuLimit, memoryLimit)
+		if err != nil {
+			return fmt.Errorf("failed to select server for self-heal: %w", err)
+		}
+
+		client, err := s.getAgentClient(server.ID, server.AgentAddress)
+		if err != nil {
+			return fmt.Errorf("failed to connect to agent for self-heal: %w", err)
+		}
+
+		if err := client.PullImage(ctx, imageRef); err != nil {
+			return fmt.Errorf("failed to pull image for self-heal: %w", err)
+		}
+
+		containerResult, err := client.CreateContainer(ctx, &DeployRequest{
+			ImageName: imageRef,
+			Name:      fmt.Sprintf("%s-selfheal-%d", applicationID, time.Now().UnixNano()),
+			EnvVars:   envVars,
+			Port:      appPort,
+			CPULimit:  int64(cpuLimit),
+			MemLimit:  int64(memoryLimit) * 1024 * 1024,
+			Labels: map[string]string{
+				"easydeploy.managed":       "true",
+				"easydeploy.deployment.id": templateDeploymentID,
+				"easydeploy.app.id":        applicationID,
+				"traefik.enable":           "true",
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create self-heal container: %w", err)
+		}
+
+		if err := s.saveContainer(ctx, templateDeploymentID, applicationID, server.ID, containerResult.ContainerID, fmt.Sprintf("%s-replica-%d", applicationID, replicaIndex), int(containerResult.HostPort), appPort, replicaIndex); err != nil {
+			return fmt.Errorf("failed to persist self-heal container: %w", err)
+		}
+
+		created++
+	}
+
+	if created == 0 {
+		return fmt.Errorf("self-heal did not create any replacement containers")
+	}
+
+	if err := s.updateTraefikConfig(ctx, applicationID); err != nil {
+		return fmt.Errorf("failed to update traefik after self-heal: %w", err)
+	}
+
+	log.Info().
+		Str("application_id", applicationID).
+		Int("created", created).
+		Int("desired_replicas", desiredReplicas).
+		Int("running_replicas", runningReplicas+created).
+		Msg("Application replicas reconciled after container stop")
+
+	return nil
+}
+
+func (s *Scheduler) cleanupUnhealthyReplicas(ctx context.Context, applicationID string) error {
+	query := `
+		SELECT c.id, c.docker_container_id, c.server_id, s.agent_address
+		FROM containers c
+		JOIN servers s ON s.id = c.server_id
+		WHERE c.application_id = $1
+		  AND c.status = 'running'
+		  AND c.health_status = 'unhealthy'
+	`
+
+	rows, err := s.db.Pool().Query(ctx, query, applicationID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type unhealthyContainer struct {
+		ID           string
+		DockerID     string
+		ServerID     string
+		AgentAddress string
+	}
+
+	var unhealthy []unhealthyContainer
+	for rows.Next() {
+		var c unhealthyContainer
+		if err := rows.Scan(&c.ID, &c.DockerID, &c.ServerID, &c.AgentAddress); err != nil {
+			continue
+		}
+		unhealthy = append(unhealthy, c)
+	}
+
+	for _, c := range unhealthy {
+		client, err := s.getAgentClient(c.ServerID, c.AgentAddress)
+		if err != nil {
+			log.Warn().Err(err).Str("container_id", c.ID).Msg("Failed to get agent client for unhealthy replica cleanup")
+			continue
+		}
+
+		if err := client.StopContainer(ctx, c.DockerID); err != nil {
+			log.Warn().Err(err).Str("container_id", c.ID).Msg("Failed to stop unhealthy container")
+		}
+
+		if err := client.RemoveContainer(ctx, c.DockerID); err != nil {
+			log.Warn().Err(err).Str("container_id", c.ID).Msg("Failed to remove unhealthy container")
+		}
+
+		updateQuery := `UPDATE containers SET status = 'stopped', updated_at = NOW() WHERE id = $1`
+		if _, err := s.db.Pool().Exec(ctx, updateQuery, c.ID); err != nil {
+			log.Warn().Err(err).Str("container_id", c.ID).Msg("Failed to mark unhealthy container as stopped")
+			continue
+		}
+
+		go s.notifyPanelContainerStatus(c.ID, "stopped", "unhealthy", nil, nil)
+	}
+
+	return nil
+}
+
+func (s *Scheduler) nextReplicaIndex(ctx context.Context, applicationID string) (int, error) {
+	query := `
+		SELECT COALESCE(MAX(replica_index), -1) + 1
+		FROM containers
+		WHERE application_id = $1
+	`
+
+	var nextIndex int
+	if err := s.db.Pool().QueryRow(ctx, query, applicationID).Scan(&nextIndex); err != nil {
+		return 0, err
+	}
+
+	return nextIndex, nil
+}
+
+func (s *Scheduler) getApplicationEnvironment(ctx context.Context, applicationID string) (map[string]string, error) {
+	query := `SELECT key, value FROM environment_variables WHERE application_id = $1`
+	rows, err := s.db.Pool().Query(ctx, query, applicationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	env := make(map[string]string)
+	for rows.Next() {
+		var key, value string
+		if err := rows.Scan(&key, &value); err != nil {
+			return nil, err
+		}
+		env[key] = value
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return env, nil
+}
+
+func (s *Scheduler) enqueueSelfHealDeployment(ctx context.Context, applicationID string) error {
+	panelApp, err := s.fetchAppFromPanel(ctx, applicationID)
+	if err != nil {
+		return fmt.Errorf("failed to fetch app details for self-heal deployment: %w", err)
+	}
+
+	deploymentID := uuid.NewString()
+	insertQuery := `
+		INSERT INTO deployments (id, application_id, status, triggered_by, created_at)
+		VALUES ($1, $2, 'pending', 'self-heal', NOW())
+	`
+	if _, err := s.db.Pool().Exec(ctx, insertQuery, deploymentID, applicationID); err != nil {
+		return fmt.Errorf("failed to create self-heal deployment record: %w", err)
+	}
+
+	job := queue.BuildJob{
+		DeploymentID:  deploymentID,
+		ApplicationID: panelApp.ID,
+		GitRepository: panelApp.GitRepository,
+		GitBranch:     panelApp.GitBranch,
+		GitToken:      panelApp.GitToken,
+		Type:          panelApp.Type,
+		BuildCommand:  panelApp.BuildCommand,
+		StartCommand:  panelApp.StartCommand,
+		RootDirectory: panelApp.RootDirectory,
+		Port:          panelApp.Port,
+		Replicas:      panelApp.Replicas,
+		CPULimit:      panelApp.CPULimit,
+		MemoryLimit:   panelApp.MemoryLimit,
+		Environment:   panelApp.Environment,
+		CallbackURL:   fmt.Sprintf("%s/api/internal/deployments/%s/status", s.cfg.PanelURL, deploymentID),
+	}
+
+	if err := s.queue.Enqueue("builds", job); err != nil {
+		return fmt.Errorf("failed to enqueue self-heal deployment: %w", err)
+	}
+
+	log.Info().
+		Str("application_id", applicationID).
+		Str("deployment_id", deploymentID).
+		Msg("Enqueued self-heal deployment to restore desired replicas")
+
+	return nil
 }
 
 // publishLogLine publishes a build log line to Redis Pub/Sub
