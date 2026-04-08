@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -216,20 +217,39 @@ func (h *ApplicationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	// Mark application as stopped before stopping containers to avoid self-heal reconciliation.
-	h.repo.UpdateApplicationStatus(r.Context(), id, "stopped")
+	if err := h.repo.UpdateApplicationStatus(r.Context(), id, "stopped"); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to update application status")
+		return
+	}
 
 	// Stop all containers first
-	containers, _ := h.repo.ListContainersByApplication(r.Context(), id)
+	containers, err := h.repo.ListContainersByApplication(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to list application containers")
+		return
+	}
+
+	var stopErrors []string
 	for _, c := range containers {
-		h.scheduler.StopContainer(r.Context(), c.ID)
+		if err := h.scheduler.StopContainer(r.Context(), c.ID); err != nil {
+			stopErrors = append(stopErrors, err.Error())
+		}
+	}
+
+	if len(stopErrors) > 0 {
+		respondError(w, http.StatusInternalServerError, "failed to stop one or more containers before delete")
+		return
 	}
 
 	// Remove Traefik config
-	h.traefikGen.RemoveConfig(id)
+	if err := h.traefikGen.RemoveConfig(id); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to remove Traefik config")
+		return
+	}
 
 	// Delete application (cascades to related records)
 	query := `DELETE FROM applications WHERE id = $1`
-	_, err := h.db.Pool().Exec(r.Context(), query, id)
+	_, err = h.db.Pool().Exec(r.Context(), query, id)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to delete application")
 		return
@@ -326,8 +346,40 @@ func (h *ApplicationHandler) Scale(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Trigger redeployment to adjust container count
-	// This would be handled by the scheduler
+	if req.Replicas == 0 {
+		if err := h.repo.UpdateApplicationStatus(r.Context(), id, "stopped"); err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to update application status")
+			return
+		}
+
+		containers, err := h.repo.ListContainersByApplication(r.Context(), id)
+		if err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to get containers")
+			return
+		}
+
+		for _, c := range containers {
+			if err := h.scheduler.StopContainer(r.Context(), c.ID); err != nil {
+				respondError(w, http.StatusInternalServerError, "failed to stop containers during scale to zero")
+				return
+			}
+		}
+
+		if err := h.traefikGen.RemoveConfig(id); err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to remove Traefik config during scale to zero")
+			return
+		}
+	} else {
+		if err := h.repo.UpdateApplicationStatus(r.Context(), id, "active"); err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to update application status")
+			return
+		}
+
+		if err := h.scheduler.ReconcileApplicationReplicas(r.Context(), id); err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to reconcile replicas")
+			return
+		}
+	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"id":       id,
@@ -340,7 +392,10 @@ func (h *ApplicationHandler) Stop(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	// Mark as stopped before iterating containers so StopContainer does not trigger self-heal.
-	h.repo.UpdateApplicationStatus(r.Context(), id, "stopped")
+	if err := h.repo.UpdateApplicationStatus(r.Context(), id, "stopped"); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to update application status")
+		return
+	}
 
 	containers, err := h.repo.ListContainersByApplication(r.Context(), id)
 	if err != nil {
@@ -349,7 +404,15 @@ func (h *ApplicationHandler) Stop(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for _, c := range containers {
-		h.scheduler.StopContainer(r.Context(), c.ID)
+		if err := h.scheduler.StopContainer(r.Context(), c.ID); err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to stop one or more containers")
+			return
+		}
+	}
+
+	if err := h.traefikGen.RemoveConfig(id); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to remove Traefik config")
+		return
 	}
 
 	respondJSON(w, http.StatusOK, map[string]string{
@@ -383,15 +446,24 @@ func (h *ApplicationHandler) Rollback(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var req struct {
-		DeploymentID string `json:"deployment_id"`
+		RollbackDeploymentID string `json:"rollback_deployment_id,omitempty"`
+		TargetDeploymentID string `json:"target_deployment_id"`
+		GitToken           string `json:"git_token,omitempty"`
+		CallbackURL        string `json:"callback_url,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
+	targetDeploymentID := req.TargetDeploymentID
+	if targetDeploymentID == "" {
+		respondError(w, http.StatusBadRequest, "target_deployment_id is required")
+		return
+	}
+
 	// Get the target deployment
-	deployment, err := h.repo.GetDeployment(r.Context(), req.DeploymentID)
+	deployment, err := h.repo.GetDeployment(r.Context(), targetDeploymentID)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "deployment not found")
 		return
@@ -402,24 +474,87 @@ func (h *ApplicationHandler) Rollback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create new deployment based on old one
-	newDeploymentID := uuid.New().String()
-	query := `
-		INSERT INTO deployments (id, application_id, status, commit_sha, commit_message, image_name, image_tag, triggered_by, created_at)
-		VALUES ($1, $2, 'pending', $3, $4, $5, $6, 'rollback', NOW())
-	`
-	if _, err := h.db.Pool().Exec(r.Context(), query,
-		newDeploymentID, id, deployment.CommitSha, "Rollback to "+deployment.CommitSha[:8],
-		deployment.ImageName, deployment.ImageTag,
-	); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to create rollback deployment")
+	if deployment.CommitSha == "" {
+		respondError(w, http.StatusBadRequest, "target deployment has no commit_sha for rollback")
+		return
+	}
+
+	app, err := h.repo.GetApplication(r.Context(), id)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "application not found")
+		return
+	}
+
+	rollbackDeploymentID := req.RollbackDeploymentID
+	if rollbackDeploymentID == "" {
+		rollbackDeploymentID = uuid.New().String()
+		query := `
+			INSERT INTO deployments (id, application_id, status, commit_sha, commit_message, image_name, image_tag, triggered_by, created_at)
+			VALUES ($1, $2, 'pending', $3, $4, $5, $6, 'rollback', NOW())
+		`
+		if _, err := h.db.Pool().Exec(r.Context(), query,
+			rollbackDeploymentID, id, deployment.CommitSha, "Rollback to "+deployment.CommitSha[:8],
+			deployment.ImageName, deployment.ImageTag,
+		); err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to create rollback deployment")
+			return
+		}
+	} else {
+		query := `
+			UPDATE deployments
+			SET status = 'pending',
+			    commit_sha = $2,
+			    commit_message = $3,
+			    image_name = $4,
+			    image_tag = $5,
+			    triggered_by = 'rollback',
+			    error_message = NULL,
+			    updated_at = NOW()
+			WHERE id = $1 AND application_id = $6
+		`
+		if _, err := h.db.Pool().Exec(r.Context(), query,
+			rollbackDeploymentID, deployment.CommitSha, "Rollback to "+deployment.CommitSha[:8], deployment.ImageName, deployment.ImageTag, id,
+		); err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to prepare rollback deployment")
+			return
+		}
+	}
+
+	envVars, _ := h.repo.GetEnvironmentVariablesAsMap(r.Context(), id)
+
+	job := queue.BuildJob{
+		DeploymentID:  rollbackDeploymentID,
+		ApplicationID: id,
+		GitRepository: app.GitRepository,
+		GitBranch:     app.GitBranch,
+		CommitSHA:     deployment.CommitSha,
+		GitToken:      req.GitToken,
+		Type:          app.Type,
+		BuildCommand:  app.BuildCommand,
+		StartCommand:  app.StartCommand,
+		RootDirectory: app.RootDirectory,
+		Port:          app.Port,
+		Replicas:      app.Replicas,
+		CPULimit:      app.CPULimit,
+		MemoryLimit:   app.MemoryLimit,
+		Environment:   envVars,
+		CallbackURL:   req.CallbackURL,
+	}
+
+	if err := h.queue.Enqueue("builds", job); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to enqueue rollback deployment")
+		return
+	}
+
+	if err := h.repo.UpdateApplicationStatus(r.Context(), id, "deploying"); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to update application status")
 		return
 	}
 
 	respondJSON(w, http.StatusOK, map[string]string{
 		"id":                id,
-		"deployment_id":     newDeploymentID,
-		"rollback_from":     req.DeploymentID,
+		"deployment_id":     rollbackDeploymentID,
+		"rollback_from":     targetDeploymentID,
 	})
 }
 
@@ -606,7 +741,10 @@ func (h *ApplicationHandler) AddDomain(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update Traefik config
-	h.traefikGen.GenerateConfig(r.Context(), id)
+	if err := h.traefikGen.GenerateConfig(r.Context(), id); err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to update Traefik config: %v", err))
+		return
+	}
 
 	respondJSON(w, http.StatusCreated, map[string]string{
 		"id":     domainID,
@@ -626,7 +764,10 @@ func (h *ApplicationHandler) RemoveDomain(w http.ResponseWriter, r *http.Request
 	}
 
 	// Update Traefik config
-	h.traefikGen.GenerateConfig(r.Context(), id)
+	if err := h.traefikGen.GenerateConfig(r.Context(), id); err != nil {
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("failed to update Traefik config: %v", err))
+		return
+	}
 
 	respondJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

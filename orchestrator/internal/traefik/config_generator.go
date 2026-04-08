@@ -164,7 +164,10 @@ func (g *ConfigGenerator) GenerateConfig(ctx context.Context, applicationID stri
 	}
 
 	if len(containers) == 0 {
-		log.Warn().Str("app", applicationID).Msg("No running containers found")
+		if err := g.removeAppConfigFiles(applicationID); err != nil {
+			return fmt.Errorf("failed to remove stale config for app without running containers: %w", err)
+		}
+		log.Warn().Str("app", applicationID).Msg("No running containers found; removed app Traefik config")
 		return nil
 	}
 
@@ -418,18 +421,27 @@ func (g *ConfigGenerator) writeConfig(applicationID string, config *DynamicConfi
 func (g *ConfigGenerator) RemoveConfig(applicationID string) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if err := g.removeAppConfigFiles(applicationID); err != nil {
+		return err
+	}
 
 	filename := filepath.Join(g.configDir, fmt.Sprintf("app-%s.yml", applicationID))
 
+	log.Info().Str("file", filename).Msg("Traefik configuration removed")
+	return nil
+}
+
+func (g *ConfigGenerator) removeAppConfigFiles(applicationID string) error {
+	filename := filepath.Join(g.configDir, fmt.Sprintf("app-%s.yml", applicationID))
 	if err := os.Remove(filename); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove config file: %w", err)
 	}
 
-	// Also remove old JSON config if it exists
 	oldJSON := filepath.Join(g.configDir, fmt.Sprintf("app-%s.json", applicationID))
-	os.Remove(oldJSON)
+	if err := os.Remove(oldJSON); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove legacy JSON config file: %w", err)
+	}
 
-	log.Info().Str("file", filename).Msg("Traefik configuration removed")
 	return nil
 }
 

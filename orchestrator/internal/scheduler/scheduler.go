@@ -1362,6 +1362,11 @@ func (s *Scheduler) StopContainer(ctx context.Context, containerID string) error
 	return nil
 }
 
+// ReconcileApplicationReplicas ensures runtime replicas match desired application replicas.
+func (s *Scheduler) ReconcileApplicationReplicas(ctx context.Context, applicationID string) error {
+	return s.reconcileApplicationReplicas(ctx, applicationID)
+}
+
 func (s *Scheduler) reconcileApplicationReplicas(ctx context.Context, applicationID string) error {
 	var appStatus string
 	var desiredReplicas, appPort, cpuLimit, memoryLimit int
@@ -1380,7 +1385,10 @@ func (s *Scheduler) reconcileApplicationReplicas(ctx context.Context, applicatio
 	}
 
 	if desiredReplicas <= 0 {
-		desiredReplicas = 1
+		if err := s.scaleApplicationToZero(ctx, applicationID); err != nil {
+			return fmt.Errorf("failed to scale application to zero: %w", err)
+		}
+		return nil
 	}
 
 	if err := s.cleanupUnhealthyReplicas(ctx, applicationID); err != nil {
@@ -1391,6 +1399,18 @@ func (s *Scheduler) reconcileApplicationReplicas(ctx context.Context, applicatio
 	countQuery := `SELECT COUNT(*) FROM containers WHERE application_id = $1 AND status = 'running' AND health_status = 'healthy'`
 	if err := s.db.Pool().QueryRow(ctx, countQuery, applicationID).Scan(&runningReplicas); err != nil {
 		return fmt.Errorf("failed to count running replicas: %w", err)
+	}
+
+	if runningReplicas > desiredReplicas {
+		if err := s.scaleApplicationDown(ctx, applicationID, runningReplicas-desiredReplicas); err != nil {
+			return fmt.Errorf("failed to scale down replicas: %w", err)
+		}
+
+		if err := s.updateTraefikConfig(ctx, applicationID); err != nil {
+			return fmt.Errorf("failed to update traefik after scale down: %w", err)
+		}
+
+		return nil
 	}
 
 	if runningReplicas >= desiredReplicas {
@@ -1488,6 +1508,127 @@ func (s *Scheduler) reconcileApplicationReplicas(ctx context.Context, applicatio
 		Int("desired_replicas", desiredReplicas).
 		Int("running_replicas", runningReplicas+created).
 		Msg("Application replicas reconciled after container stop")
+
+	return nil
+}
+
+func (s *Scheduler) scaleApplicationToZero(ctx context.Context, applicationID string) error {
+	query := `
+		SELECT c.id, c.docker_container_id, c.server_id, s.agent_address
+		FROM containers c
+		JOIN servers s ON s.id = c.server_id
+		WHERE c.application_id = $1
+		  AND c.status = 'running'
+	`
+
+	rows, err := s.db.Pool().Query(ctx, query, applicationID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type activeContainer struct {
+		ID           string
+		DockerID     string
+		ServerID     string
+		AgentAddress string
+	}
+
+	containers := make([]activeContainer, 0)
+	for rows.Next() {
+		var c activeContainer
+		if err := rows.Scan(&c.ID, &c.DockerID, &c.ServerID, &c.AgentAddress); err != nil {
+			continue
+		}
+		containers = append(containers, c)
+	}
+
+	for _, c := range containers {
+		if err := s.stopAndMarkContainer(ctx, c.ID, c.DockerID, c.ServerID, c.AgentAddress, "unknown"); err != nil {
+			return err
+		}
+	}
+
+	if s.traefikGen != nil {
+		if err := s.traefikGen.RemoveConfig(applicationID); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Scheduler) scaleApplicationDown(ctx context.Context, applicationID string, toRemove int) error {
+	if toRemove <= 0 {
+		return nil
+	}
+
+	query := `
+		SELECT c.id, c.docker_container_id, c.server_id, s.agent_address
+		FROM containers c
+		JOIN servers s ON s.id = c.server_id
+		WHERE c.application_id = $1
+		  AND c.status = 'running'
+		  AND c.health_status = 'healthy'
+		ORDER BY c.replica_index DESC, c.created_at DESC
+	`
+
+	rows, err := s.db.Pool().Query(ctx, query, applicationID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type runningContainer struct {
+		ID           string
+		DockerID     string
+		ServerID     string
+		AgentAddress string
+	}
+
+	candidates := make([]runningContainer, 0)
+	for rows.Next() {
+		var c runningContainer
+		if err := rows.Scan(&c.ID, &c.DockerID, &c.ServerID, &c.AgentAddress); err != nil {
+			continue
+		}
+		candidates = append(candidates, c)
+	}
+
+	if len(candidates) < toRemove {
+		toRemove = len(candidates)
+	}
+
+	for i := 0; i < toRemove; i++ {
+		c := candidates[i]
+		if err := s.stopAndMarkContainer(ctx, c.ID, c.DockerID, c.ServerID, c.AgentAddress, "healthy"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Scheduler) stopAndMarkContainer(ctx context.Context, containerID, dockerID, serverID, agentAddress, healthStatus string) error {
+	client, err := s.getAgentClient(serverID, agentAddress)
+	if err != nil {
+		return err
+	}
+
+	if err := client.StopContainer(ctx, dockerID); err != nil {
+		return err
+	}
+
+	if err := client.RemoveContainer(ctx, dockerID); err != nil {
+		log.Warn().Err(err).Str("container_id", containerID).Msg("Failed to remove container after stop")
+	}
+
+	updateQuery := `UPDATE containers SET status = 'stopped', updated_at = NOW() WHERE id = $1`
+	if _, err := s.db.Pool().Exec(ctx, updateQuery, containerID); err != nil {
+		return err
+	}
+
+	go s.notifyPanelContainerStatus(containerID, "stopped", healthStatus, nil, nil)
 
 	return nil
 }

@@ -115,7 +115,13 @@ class DeploymentService
         event(new DeploymentStarted($newDeployment));
 
         try {
-            $this->orchestrator->rollback($application, $targetDeployment->id);
+            $callbackUrl = url('/api/internal/deployments/' . $newDeployment->id . '/status');
+            $this->orchestrator->rollback(
+                $application,
+                $targetDeployment->id,
+                $newDeployment->id,
+                $callbackUrl
+            );
         } catch (\Exception $e) {
             $this->markAsFailed($newDeployment, $e->getMessage());
         }

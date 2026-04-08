@@ -89,28 +89,25 @@ class OrchestratorClient
         return $this->http->get('/api/v1/servers')->throw()->json();
     }
 
-    public function rollback(Application $app, string $deploymentId): array
+    public function rollback(
+        Application $app,
+        string $targetDeploymentId,
+        ?string $rollbackDeploymentId = null,
+        ?string $callbackUrl = null
+    ): array
     {
         return $this->http->post("/api/v1/applications/{$app->id}/rollback", [
-            'deployment_id' => $deploymentId,
+            'target_deployment_id' => $targetDeploymentId,
+            'rollback_deployment_id' => $rollbackDeploymentId,
+            'git_token' => $app->git_token ?? '',
+            'callback_url' => $callbackUrl ?? '',
         ])->throw()->json();
     }
 
     public function updateProxyConfig(Application $app): array
     {
-        return $this->http->post('/api/v1/proxy/sync', [
-            'application_id' => $app->id,
-            'domains' => $app->domains->pluck('domain')->toArray(),
-            'containers' => $app->containers()
-                ->where('status', 'running')
-                ->get()
-                ->map(fn ($c) => [
-                    'ip' => $c->internal_ip,
-                    'port' => $c->internal_port,
-                    'server' => $c->server->hostname,
-                ])
-                ->toArray(),
-        ])->throw()->json();
+        return $this->http->post("/api/v1/proxy/sync/{$app->id}")
+            ->throw()->json();
     }
 
     public function cancelDeployment(string $deploymentId): array
