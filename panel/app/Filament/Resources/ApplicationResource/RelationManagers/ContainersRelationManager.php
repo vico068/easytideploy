@@ -91,10 +91,13 @@ class ContainersRelationManager extends RelationManager
     {
         $applicationId = (string) ($this->ownerRecord?->id ?? '');
         if ($applicationId === '') {
-            return [];
+            return [
+                'container-status-changed' => 'onContainerStatusChanged',
+            ];
         }
 
         return [
+            'container-status-changed' => 'onContainerStatusChanged',
             "echo-private:application.{$applicationId},ContainerStatusChanged" => 'onContainerStatusChanged',
         ];
     }

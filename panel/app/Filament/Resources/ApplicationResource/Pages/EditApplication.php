@@ -17,11 +17,13 @@ class EditApplication extends EditRecord
     public function onDeploymentStatusChanged(array $event): void
     {
         $this->refreshStatus();
+        $this->dispatch('deployment-triggered');
     }
 
     public function onContainerStatusChanged(array $event): void
     {
         $this->refreshStatus();
+        $this->dispatch('container-status-changed');
     }
 
     protected function getListeners(): array

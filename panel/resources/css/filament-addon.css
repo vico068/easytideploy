@@ -207,3 +207,115 @@
     background-color: #0a0f1a !important;
     border-color: rgba(255,255,255,0.07) !important;
 }
+
+/* ================================================================
+   16. APPLICATION WIZARD (CREATE + EDIT)
+   ================================================================ */
+.ed-app-wizard {
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 1rem;
+    padding: 1rem;
+    background:
+        radial-gradient(circle at top right, rgba(13, 139, 250, 0.08), transparent 48%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.95));
+}
+
+.dark .ed-app-wizard {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background:
+        radial-gradient(circle at top right, rgba(13, 139, 250, 0.12), transparent 48%),
+        linear-gradient(180deg, rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.72));
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+.ed-app-wizard [class*='wizard'][class*='header'],
+.ed-app-wizard .fi-fo-wizard-header {
+    border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+    padding-bottom: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.dark .ed-app-wizard [class*='wizard'][class*='header'],
+.dark .ed-app-wizard .fi-fo-wizard-header {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+.ed-app-wizard .fi-fo-wizard-step,
+.ed-app-wizard [class*='wizard-step'] {
+    border: 1px solid rgba(148, 163, 184, 0.24);
+    background-color: rgba(255, 255, 255, 0.66);
+    border-radius: 0.85rem;
+    transition: transform 0.2s ease, box-shadow 0.25s ease, background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.dark .ed-app-wizard .fi-fo-wizard-step,
+.dark .ed-app-wizard [class*='wizard-step'] {
+    border-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(15, 23, 42, 0.46);
+}
+
+.ed-app-wizard .fi-fo-wizard-step:hover,
+.ed-app-wizard [class*='wizard-step']:hover {
+    transform: translateY(-1px);
+    border-color: rgba(13, 139, 250, 0.38);
+}
+
+.ed-app-wizard .fi-fo-wizard-step.fi-active,
+.ed-app-wizard [class*='wizard-step'][aria-current='step'] {
+    background: linear-gradient(135deg, rgba(13, 139, 250, 0.12), rgba(6, 182, 212, 0.08));
+    box-shadow: 0 8px 24px -18px rgba(13, 139, 250, 0.85);
+}
+
+.dark .ed-app-wizard .fi-fo-wizard-step.fi-active,
+.dark .ed-app-wizard [class*='wizard-step'][aria-current='step'] {
+    background: linear-gradient(135deg, rgba(13, 139, 250, 0.2), rgba(6, 182, 212, 0.12));
+    border-color: rgba(96, 184, 255, 0.45);
+}
+
+.ed-app-wizard .fi-fo-wizard-step-label,
+.ed-app-wizard [class*='wizard-step'] [class*='label'] {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.ed-app-wizard .fi-fo-wizard-step-description,
+.ed-app-wizard [class*='wizard-step'] [class*='description'] {
+    opacity: 0.78;
+}
+
+.ed-app-wizard .fi-btn,
+.ed-app-wizard button[type='button'],
+.ed-app-wizard button[type='submit'] {
+    border-radius: 0.8rem;
+}
+
+.ed-app-wizard .fi-fo-wizard-header,
+.ed-app-wizard [class*='wizard'][class*='header'] {
+    overflow-x: auto;
+    scrollbar-width: thin;
+    padding-bottom: 0.25rem;
+}
+
+.ed-app-wizard .fi-fo-wizard-header > * {
+    min-width: max-content;
+}
+
+@media (max-width: 640px) {
+    .ed-app-wizard {
+        padding: 0.75rem;
+        border-radius: 0.9rem;
+    }
+
+    .ed-app-wizard .fi-fo-wizard-header,
+    .ed-app-wizard [class*='wizard'][class*='header'] {
+        margin-inline: -0.1rem;
+        padding-inline: 0.1rem;
+        scroll-padding-left: 0.3rem;
+    }
+
+    .ed-app-wizard .fi-fo-wizard-step,
+    .ed-app-wizard [class*='wizard-step'] {
+        min-width: 12rem;
+    }
+}
