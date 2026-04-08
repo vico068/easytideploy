@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -448,6 +449,11 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 
 	logger.Info().Int("replicas", replicas).Msg("Deploying containers with zero-downtime strategy")
 
+	hasExistingReplicas, err := s.hasExistingRunningReplicas(ctx, job.ApplicationID, job.DeploymentID)
+	if err != nil {
+		return fmt.Errorf("failed to check existing replicas: %w", err)
+	}
+
 	// Track new containers for health checks
 	var newContainers []containerInfo
 
@@ -472,10 +478,12 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 			return fmt.Errorf("failed to pull image on agent: %w", err)
 		}
 
-		// Create container as staged replica using _deploy suffix.
+		containerName := s.deploymentContainerName(job.ApplicationID, job.DeploymentID, i, hasExistingReplicas)
+
+		// Create container using stage suffix only for rolling deployments.
 		containerResult, err := client.CreateContainer(ctx, &DeployRequest{
 			ImageName: fmt.Sprintf("%s:%s", result.AgentImageName, result.ImageTag),
-			Name:      fmt.Sprintf("%s-replica-%d_deploy", job.ApplicationID, i),
+			Name:      containerName,
 			EnvVars:   job.Environment,
 			Port:      job.Port,
 			CPULimit:  int64(job.CPULimit),
@@ -492,7 +500,7 @@ func (s *Scheduler) deployContainers(ctx context.Context, job *queue.BuildJob, r
 		}
 
 		// Save container to database
-		if err := s.saveContainer(ctx, job.DeploymentID, job.ApplicationID, server.ID, containerResult.ContainerID, fmt.Sprintf("%s-replica-%d_deploy", job.ApplicationID, i), int(containerResult.HostPort), job.Port, i); err != nil {
+		if err := s.saveContainer(ctx, job.DeploymentID, job.ApplicationID, server.ID, containerResult.ContainerID, containerName, int(containerResult.HostPort), job.Port, i); err != nil {
 			logger.Error().Err(err).Msg("Failed to save container to database")
 		}
 
@@ -649,6 +657,7 @@ func (s *Scheduler) saveCommitInfo(ctx context.Context, deploymentID string, com
 }
 
 func (s *Scheduler) notifyPanel(callbackURL string, status DeploymentStatus, errorMsg string, buildLogs string, commitSHA string, commitMsg string) {
+	callbackURL = s.resolveCallbackURL(callbackURL)
 	if callbackURL == "" {
 		return
 	}
@@ -698,6 +707,38 @@ func (s *Scheduler) notifyPanel(callbackURL string, status DeploymentStatus, err
 	}
 }
 
+func (s *Scheduler) resolveCallbackURL(callbackURL string) string {
+	callbackURL = strings.TrimSpace(callbackURL)
+	if callbackURL == "" {
+		return ""
+	}
+
+	u, err := url.Parse(callbackURL)
+	if err != nil || u.Host == "" {
+		return callbackURL
+	}
+
+	host := strings.Trim(strings.Split(u.Host, ":")[0], "[]")
+	if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+		return callbackURL
+	}
+
+	panelURL := strings.TrimSpace(s.cfg.PanelURL)
+	if panelURL == "" {
+		return callbackURL
+	}
+
+	panelParsed, err := url.Parse(panelURL)
+	if err != nil || panelParsed.Host == "" {
+		return callbackURL
+	}
+
+	u.Scheme = panelParsed.Scheme
+	u.Host = panelParsed.Host
+
+	return u.String()
+}
+
 func (s *Scheduler) saveContainer(ctx context.Context, deploymentID, appID, serverID, containerID, name string, hostPort, internalPort, replica int) error {
 	query := `
 		INSERT INTO containers (id, deployment_id, application_id, server_id, docker_container_id, name, host_port, internal_port, status, health_status, replica_index, created_at, updated_at)
@@ -725,7 +766,7 @@ func (s *Scheduler) promoteDeploymentContainerNames(ctx context.Context, applica
 		WHERE application_id = $1
 		  AND deployment_id = $2
 		  AND status = 'running'
-		  AND name LIKE '%_deploy'
+		  AND name LIKE '%_deploy%'
 	`
 
 	if _, err := s.db.Pool().Exec(ctx, query, applicationID, deploymentID); err != nil {
@@ -733,6 +774,36 @@ func (s *Scheduler) promoteDeploymentContainerNames(ctx context.Context, applica
 	}
 
 	return nil
+}
+
+func (s *Scheduler) hasExistingRunningReplicas(ctx context.Context, applicationID, currentDeploymentID string) (bool, error) {
+	query := `
+		SELECT COUNT(*)
+		FROM containers
+		WHERE application_id = $1
+		  AND status = 'running'
+		  AND deployment_id != $2
+	`
+
+	var count int
+	if err := s.db.Pool().QueryRow(ctx, query, applicationID, currentDeploymentID).Scan(&count); err != nil {
+		return false, err
+	}
+
+	return count > 0, nil
+}
+
+func (s *Scheduler) deploymentContainerName(applicationID, deploymentID string, replica int, rolling bool) string {
+	if !rolling {
+		return fmt.Sprintf("%s-replica-%d", applicationID, replica)
+	}
+
+	deploySuffix := deploymentID
+	if len(deploySuffix) > 8 {
+		deploySuffix = deploySuffix[:8]
+	}
+
+	return fmt.Sprintf("%s-replica-%d_deploy_%s", applicationID, replica, deploySuffix)
 }
 
 // cleanupOldContainers stops and removes containers from previous deployments of the same application
