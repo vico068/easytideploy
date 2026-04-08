@@ -220,31 +220,37 @@
 
         @php
             $desiredReplicas = max(1, (int) $selectedApp->replicas);
-            $mermaidLines = [
-                'flowchart LR',
-                'LB["Balancer EasyTI"]',
+            $lbNodes = [
+                [
+                    'id' => 'lb',
+                    'label' => 'Balancer EasyTI',
+                    'role' => 'balancer',
+                    'status' => 'online',
+                ],
             ];
+            $lbEdges = [];
 
             for ($i = 0; $i < $desiredReplicas; $i++) {
                 $replica = $containers->firstWhere('replica_index', $i);
-                $replicaNode = 'R' . $i;
-                $replicaStatus = $replica ? 'online' : 'offline';
-                $mermaidLines[] = sprintf('%s["Replica %d\\n%s"]', $replicaNode, $i, $replicaStatus);
-                $mermaidLines[] = sprintf('LB --> %s', $replicaNode);
-                $mermaidLines[] = sprintf('class %s %s', $replicaNode, $replica ? 'replicaOn' : 'replicaOff');
+                $nodeId = 'r-' . $i;
+                $lbNodes[] = [
+                    'id' => $nodeId,
+                    'label' => sprintf("Replica %d\\n%s", $i, $replica ? 'online' : 'offline'),
+                    'role' => 'replica',
+                    'status' => $replica ? 'online' : 'offline',
+                ];
+                $lbEdges[] = [
+                    'from' => 'lb',
+                    'to' => $nodeId,
+                ];
             }
-
-            $mermaidLines[] = 'class LB balancer';
-            $mermaidLines[] = 'classDef balancer fill:#0b4a6f,stroke:#06b6d4,stroke-width:2.5px,color:#e2f6ff;';
-            $mermaidLines[] = 'classDef replicaOn fill:#0f766e,stroke:#14b8a6,stroke-width:2px,color:#ecfeff;';
-            $mermaidLines[] = 'classDef replicaOff fill:#9f1239,stroke:#fb7185,stroke-width:2px,color:#fff1f2;';
-            $mermaidDiagram = implode("\n", $mermaidLines);
         @endphp
 
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <div class="xl:col-span-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-slate-900/60 p-4" wire:ignore>
-                <div id="lbMermaidSource" class="hidden">{{ $mermaidDiagram }}</div>
-                <div id="lbMermaidDiagram" class="min-h-[260px] flex items-center justify-center"></div>
+                <script id="lbNodesData" type="application/json">@json($lbNodes)</script>
+                <script id="lbEdgesData" type="application/json">@json($lbEdges)</script>
+                <div id="lbNetworkDiagram" class="min-h-[260px] rounded-lg border border-slate-200/80 dark:border-slate-700/70 bg-gradient-to-br from-sky-50/70 to-cyan-50/40 dark:from-slate-900/40 dark:to-slate-800/40"></div>
             </div>
 
             <div class="rounded-xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-slate-950/50 p-4">
@@ -464,7 +470,7 @@
 
 @assets
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js" crossorigin="anonymous"></script>
 @endassets
 
 @script
@@ -684,61 +690,100 @@
         void initLoadBalancerDiagram();
     }
 
-    async function initLoadBalancerDiagram() {
-        const source = document.getElementById('lbMermaidSource');
-        const target = document.getElementById('lbMermaidDiagram');
-        if (!source || !target || !window.mermaid) return;
-
-        const code = source.textContent?.trim();
-        if (!code) return;
+    function initLoadBalancerDiagram() {
+        const nodeData = document.getElementById('lbNodesData');
+        const edgeData = document.getElementById('lbEdgesData');
+        const container = document.getElementById('lbNetworkDiagram');
+        if (!nodeData || !edgeData || !container || !window.vis) return;
 
         const isDarkMode = document.documentElement.classList.contains('dark');
+        const nodesRaw = JSON.parse(nodeData.textContent || '[]');
+        const edgesRaw = JSON.parse(edgeData.textContent || '[]');
 
-        mermaid.initialize({
-            startOnLoad: false,
-            securityLevel: 'loose',
-            theme: isDarkMode ? 'dark' : 'default',
-            themeVariables: {
-                fontFamily: 'ui-sans-serif, system-ui, sans-serif',
-                primaryColor: isDarkMode ? '#0b4a6f' : '#e0f2fe',
-                primaryBorderColor: isDarkMode ? '#06b6d4' : '#0284c7',
-                primaryTextColor: isDarkMode ? '#e2f6ff' : '#0c4a6e',
-                secondaryColor: isDarkMode ? '#0f766e' : '#ccfbf1',
-                secondaryBorderColor: isDarkMode ? '#14b8a6' : '#0f766e',
-                tertiaryColor: isDarkMode ? '#1e293b' : '#f8fafc',
-                tertiaryBorderColor: isDarkMode ? '#334155' : '#cbd5e1',
-                lineColor: isDarkMode ? '#38bdf8' : '#0284c7',
-                nodeBorder: isDarkMode ? '#06b6d4' : '#0ea5e9',
-                mainBkg: isDarkMode ? '#0f172a' : '#f8fafc',
-                clusterBkg: isDarkMode ? '#0b1220' : '#f0f9ff',
-                clusterBorder: isDarkMode ? '#1e3a5f' : '#bae6fd',
-            },
-            flowchart: {
-                curve: 'basis',
-                nodeSpacing: 40,
-                rankSpacing: 50,
-                padding: 10,
-                htmlLabels: true,
-            },
-        });
-
-        try {
-            const diagramId = `lb-${Date.now()}`;
-            const { svg } = await mermaid.render(diagramId, code);
-            target.innerHTML = svg;
-
-            // EasyTI finishing touch: subtle glow and cleaner labels in both themes.
-            const renderedSvg = target.querySelector('svg');
-            if (renderedSvg) {
-                renderedSvg.style.maxWidth = '100%';
-                renderedSvg.style.height = 'auto';
-                renderedSvg.style.filter = isDarkMode
-                    ? 'drop-shadow(0 8px 22px rgba(14,165,233,0.25))'
-                    : 'drop-shadow(0 6px 16px rgba(14,165,233,0.18))';
+        const nodes = new vis.DataSet(nodesRaw.map((n) => {
+            if (n.role === 'balancer') {
+                return {
+                    id: n.id,
+                    label: n.label,
+                    shape: 'box',
+                    font: { color: '#e0f2fe', face: 'ui-sans-serif', size: 16, bold: true },
+                    color: {
+                        background: '#0b4a6f',
+                        border: '#06b6d4',
+                        highlight: { background: '#075985', border: '#22d3ee' },
+                        hover: { background: '#075985', border: '#22d3ee' },
+                    },
+                    borderWidth: 2,
+                    margin: 16,
+                };
             }
-        } catch (error) {
-            target.innerHTML = '<p class="text-xs text-rose-500">Nao foi possivel renderizar o diagrama de balanceamento.</p>';
-        }
+
+            const online = n.status === 'online';
+            return {
+                id: n.id,
+                label: n.label,
+                shape: 'box',
+                font: {
+                    color: online ? '#ecfeff' : '#fff1f2',
+                    face: 'ui-sans-serif',
+                    size: 14,
+                    bold: true,
+                },
+                color: online
+                    ? {
+                        background: '#0f766e',
+                        border: '#14b8a6',
+                        highlight: { background: '#0d9488', border: '#2dd4bf' },
+                        hover: { background: '#0d9488', border: '#2dd4bf' },
+                    }
+                    : {
+                        background: '#9f1239',
+                        border: '#fb7185',
+                        highlight: { background: '#be123c', border: '#fda4af' },
+                        hover: { background: '#be123c', border: '#fda4af' },
+                    },
+                borderWidth: 2,
+                margin: 14,
+            };
+        }));
+
+        const edges = new vis.DataSet(edgesRaw.map((e) => ({
+            from: e.from,
+            to: e.to,
+            arrows: { to: { enabled: true, scaleFactor: 0.8 } },
+            color: {
+                color: isDarkMode ? '#38bdf8' : '#0284c7',
+                highlight: isDarkMode ? '#67e8f9' : '#0ea5e9',
+                hover: isDarkMode ? '#67e8f9' : '#0ea5e9',
+            },
+            width: 2,
+            smooth: { enabled: true, type: 'curvedCW', roundness: 0.18 },
+        })));
+
+        const options = {
+            autoResize: true,
+            physics: false,
+            interaction: {
+                dragNodes: false,
+                dragView: false,
+                zoomView: false,
+                selectable: false,
+            },
+            layout: {
+                hierarchical: {
+                    enabled: true,
+                    direction: 'LR',
+                    sortMethod: 'directed',
+                    levelSeparation: 220,
+                    nodeSpacing: 140,
+                    treeSpacing: 160,
+                },
+            },
+        };
+
+        container.innerHTML = '';
+        const network = new vis.Network(container, { nodes, edges }, options);
+        network.once('afterDrawing', () => network.fit({ animation: false, padding: 20 }));
     }
 
     // Initial render
