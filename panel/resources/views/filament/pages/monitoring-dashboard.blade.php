@@ -316,6 +316,68 @@
                     <p class="text-sm">Sem dados no período</p>
                 </div>
             @endif
+
+            @php
+                $httpTabs = [
+                    '5xx' => ['label' => '500XX', 'rows' => $httpRoutesByStatus['5xx'] ?? []],
+                    '4xx' => ['label' => '400XX', 'rows' => $httpRoutesByStatus['4xx'] ?? []],
+                    '3xx' => ['label' => '300XX', 'rows' => $httpRoutesByStatus['3xx'] ?? []],
+                    '2xx' => ['label' => '200XX', 'rows' => $httpRoutesByStatus['2xx'] ?? []],
+                ];
+            @endphp
+
+            <div class="mt-6" x-data="{ routeTab: '5xx' }">
+                <div class="flex flex-wrap items-center gap-2 mb-3">
+                    @foreach($httpTabs as $key => $tab)
+                        <button
+                            type="button"
+                            @click="routeTab = '{{ $key }}'"
+                            class="px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all duration-150"
+                            :class="routeTab === '{{ $key }}'
+                                ? 'bg-sky-50 dark:bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-500/30'
+                                : 'bg-white dark:bg-slate-800/60 text-slate-500 dark:text-slate-300 border-slate-200 dark:border-slate-700'"
+                        >
+                            {{ $tab['label'] }}
+                            <span class="ml-1 text-[11px] opacity-80">({{ number_format(collect($tab['rows'])->sum('count')) }})</span>
+                        </button>
+                    @endforeach
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-white/[0.08]">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-50 dark:bg-slate-900/40 border-b border-slate-200 dark:border-white/[0.08]">
+                            <tr>
+                                <th class="px-4 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Route</th>
+                                <th class="px-4 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Count Request</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($httpTabs as $key => $tab)
+                                <template x-if="routeTab === '{{ $key }}'">
+                                    <tr>
+                                        <td colspan="2" class="p-0">
+                                            <table class="min-w-full text-sm">
+                                                @forelse($tab['rows'] as $row)
+                                                    <tr class="border-b border-slate-100 dark:border-white/[0.06] last:border-0">
+                                                        <td class="px-4 py-2.5 font-mono text-xs sm:text-sm text-slate-700 dark:text-slate-200 break-all">{{ $row['route'] }}</td>
+                                                        <td class="px-4 py-2.5 text-right font-semibold text-slate-900 dark:text-white">{{ number_format($row['count']) }}</td>
+                                                    </tr>
+                                                @empty
+                                                    <tr>
+                                                        <td colspan="2" class="px-4 py-6 text-center text-slate-400 dark:text-slate-500">
+                                                            Sem rotas detectadas nesta faixa de status
+                                                        </td>
+                                                    </tr>
+                                                @endforelse
+                                            </table>
+                                        </td>
+                                    </tr>
+                                </template>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
 
         {{-- Resources Chart --}}

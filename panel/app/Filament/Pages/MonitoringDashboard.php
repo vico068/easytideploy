@@ -120,6 +120,8 @@ class MonitoringDashboard extends Page
         $resourceChartData = ['labels' => [], 'datasets' => []];
         $networkChartData = ['labels' => [], 'datasets' => []];
         $httpChartData = ['labels' => [], '2xx' => [], '3xx' => [], '4xx' => [], '5xx' => []];
+        $httpRoutesByStatus = ['5xx' => [], '4xx' => [], '3xx' => [], '2xx' => []];
+        $logs = collect();
 
         if ($selectedApp) {
             $containers = Container::where('application_id', $selectedApp->id)
@@ -313,6 +315,9 @@ class MonitoringDashboard extends Page
 
                 $networkChartData = ['labels' => $netLabels, 'datasets' => $netDatasets];
             }
+
+            $logs = $this->getContainerLogs($selectedApp->id);
+            $httpRoutesByStatus = $this->buildHttpRoutesByStatus($logs);
         }
 
         return [
@@ -328,8 +333,109 @@ class MonitoringDashboard extends Page
             'resourceChartData' => $resourceChartData,
             'networkChartData' => $networkChartData,
             'httpChartData' => $httpChartData,
-            'logs' => $selectedApp ? $this->getContainerLogs($selectedApp->id) : collect(),
+            'httpRoutesByStatus' => $httpRoutesByStatus,
+            'logs' => $logs,
         ];
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, object> $logs
+     * @return array<string, array<int, array{route:string,count:int}>>
+     */
+    protected function buildHttpRoutesByStatus(\Illuminate\Support\Collection $logs): array
+    {
+        $grouped = [
+            '5xx' => [],
+            '4xx' => [],
+            '3xx' => [],
+            '2xx' => [],
+        ];
+
+        foreach ($logs as $log) {
+            $parsed = $this->parseRouteAndStatusFromLogLine((string) ($log->message ?? ''));
+            if (! $parsed) {
+                continue;
+            }
+
+            $statusBucket = intdiv($parsed['status'], 100).'xx';
+            if (! isset($grouped[$statusBucket])) {
+                continue;
+            }
+
+            $route = $parsed['route'];
+            $grouped[$statusBucket][$route] = ($grouped[$statusBucket][$route] ?? 0) + 1;
+        }
+
+        $result = [];
+        foreach ($grouped as $statusBucket => $routes) {
+            arsort($routes);
+
+            $result[$statusBucket] = collect($routes)
+                ->take(25)
+                ->map(fn (int $count, string $route) => [
+                    'route' => $route,
+                    'count' => $count,
+                ])
+                ->values()
+                ->toArray();
+        }
+
+        return $result;
+    }
+
+    /**
+     * @return array{route:string,status:int}|null
+     */
+    protected function parseRouteAndStatusFromLogLine(string $line): ?array
+    {
+        if ($line === '') {
+            return null;
+        }
+
+        $patterns = [
+            // Common format: "GET /api/users HTTP/1.1" 200
+            '/"(?:GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+([^\s"?]+)(?:\?[^\s"]*)?\s+HTTP\/[^\s"]+"\s+(\d{3})\b/i',
+            // Structured format: method=GET path=/api/users status=200
+            '/\bpath=([^\s"?]+)(?:\?[^\s"]*)?.*?\bstatus(?:=|:|\s)(\d{3})\b/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (! preg_match($pattern, $line, $matches)) {
+                continue;
+            }
+
+            $route = $this->normalizeRoutePath((string) $matches[1]);
+            $status = (int) $matches[2];
+
+            if ($route === '' || $status < 200 || $status >= 600) {
+                return null;
+            }
+
+            return [
+                'route' => $route,
+                'status' => $status,
+            ];
+        }
+
+        return null;
+    }
+
+    protected function normalizeRoutePath(string $route): string
+    {
+        $route = trim($route);
+        if ($route === '') {
+            return '/';
+        }
+
+        if (str_starts_with($route, 'http://') || str_starts_with($route, 'https://')) {
+            $route = parse_url($route, PHP_URL_PATH) ?: '/';
+        }
+
+        if ($route === '') {
+            return '/';
+        }
+
+        return str_starts_with($route, '/') ? $route : '/'.$route;
     }
 
     protected function getContainerLogs($appId): \Illuminate\Support\Collection
